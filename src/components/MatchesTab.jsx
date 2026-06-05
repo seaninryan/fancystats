@@ -13,9 +13,10 @@ export default function MatchesTab({ data, update }) {
     setBusy("Checking for matches…"); setError(null);
     try {
       const { stubs, teams } = await fetchSeasonEvents(data.meta);
+      const now = Date.now();
       update((d) => {
         const next = upsertMatchStubs(d, stubs, teams);
-        next.meta = { ...next.meta, lastEventSync: Date.now() };
+        next.meta = { ...next.meta, lastEventSync: now };
         return next;
       });
     } catch (e) { setError(`Sync failed: ${e.message}`); }
@@ -33,7 +34,8 @@ export default function MatchesTab({ data, update }) {
       if (i < eventIds.length - 1) await sleep(300);
     }
     if (results.length) {
-      update((d) => results.reduce((acc, r) => applyImport(acc, r, Date.now()), d));
+      const now = Date.now();
+      update((d) => results.reduce((acc, r) => applyImport(acc, r, now), d));
     }
     setBusy(null);
   };
@@ -66,7 +68,7 @@ export default function MatchesTab({ data, update }) {
       {error && <div className="banner err">{error}</div>}
       {matches.length === 0 && <p className="dim">No matches yet — tap "Check for new matches".</p>}
       {rounds.map(({ round, items }) => (
-        <section key={round ?? "none"}>
+        <section key={`${round ?? "none"}-${items[0].eventId}`}>
           <h3>Round {round ?? "?"} <span className="dim">— {fmtDate(items[0].kickoff)}</span></h3>
           {items.map((m) => (
             <div key={m.eventId} className="card row">
