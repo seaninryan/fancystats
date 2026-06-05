@@ -130,12 +130,11 @@ async function walkEvents(meta, direction, fetcher) {
         fetcher,
       );
     } catch (e) {
-      if (e.status === 404 && page === 0) return out; // empty feed (e.g. season over)
-      if (e.status === 404) return out; // walked past the last page
+      if (e.status === 404) return out; // empty feed or walked past the last page
       throw e;
     }
     out.push(...(body.events || []));
-    if (!body.hasNextPage) break;
+    if (!body.hasNextPage) break; // absent hasNextPage counts as last page
   }
   return out;
 }
@@ -159,14 +158,20 @@ export async function fetchSeasonEvents(meta, fetcher = (...a) => fetch(...a)) {
 // gracefully (partial import); an event fetch failure throws.
 export async function importMatch(eventId, fetcher = (...a) => fetch(...a)) {
   const eventPayload = await fetchJson(`/event/${eventId}`, fetcher);
+  // Only a 404 (genuine SofaScore data gap) degrades gracefully; anything else
+  // (403 rate-limit, network failure) aborts so the UI never fakes a "done" import.
   let lineupsPayload = null;
   try {
     lineupsPayload = await fetchJson(`/event/${eventId}/lineups`, fetcher);
-  } catch { /* known SofaScore gap -> partial import */ }
+  } catch (e) {
+    if (e.status !== 404) throw e;
+  }
   let incidentsPayload = { incidents: [] };
   try {
     incidentsPayload = await fetchJson(`/event/${eventId}/incidents`, fetcher);
-  } catch { /* score-only import still useful */ }
+  } catch (e) {
+    if (e.status !== 404) throw e;
+  }
   return normalize(eventPayload, lineupsPayload, incidentsPayload);
 }
 

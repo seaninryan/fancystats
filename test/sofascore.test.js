@@ -57,6 +57,15 @@ describe("fetchSeasonEvents", () => {
     const { stubs } = await fetchSeasonEvents(meta, f);
     expect(stubs).toHaveLength(1);
   });
+  it("stops after one page when hasNextPage is absent (treated as last page)", async () => {
+    const f = stub({
+      "/unique-tournament/192/season/87682/events/last/0": { body: { events: [ev(11, 100)] } },
+      "/unique-tournament/192/season/87682/events/next/0": { status: 404, body: {} },
+    });
+    const { stubs } = await fetchSeasonEvents(meta, f);
+    expect(stubs).toHaveLength(1);
+    expect(f.calls.filter((u) => u.includes("/last/"))).toHaveLength(1);
+  });
 });
 
 describe("importMatch", () => {
@@ -83,5 +92,24 @@ describe("importMatch", () => {
   it("propagates event fetch failure", async () => {
     const f = stub({ "/event/555": { status: 403, body: {} } });
     await expect(importMatch(555, f)).rejects.toThrow("403");
+  });
+  it("propagates non-404 lineups failure (rate limit must not fake a partial import)", async () => {
+    const f = stub({
+      "/event/555": { body: event },
+      "/event/555/lineups": { status: 403, body: {} },
+      "/event/555/incidents": { body: incidents },
+    });
+    await expect(importMatch(555, f)).rejects.toThrow("403");
+  });
+  it("incidents 404 still imports with empty incidents", async () => {
+    const f = stub({
+      "/event/555": { body: event },
+      "/event/555/lineups": { body: lineups },
+      // incidents route unmatched -> stub returns 404
+    });
+    const res = await importMatch(555, f);
+    expect(res.match.partial).toBe(false);
+    expect(res.appearances.length).toBeGreaterThan(0);
+    expect(res.match.goalTimes).toEqual({ home: [], away: [] });
   });
 });
