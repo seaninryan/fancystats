@@ -1,0 +1,21 @@
+{
+  "confirmed": true,
+  "home": {
+    "formation": "4-3-3",
+    "players": [
+      { "player": { "id": 100, "name": "Leon Pohls", "position": "G" }, "position": "G", "shirtNumber": 1, "substitute": false, "statistics": { "minutesPlayed": 90 } },
+      { "player": { "id": 101, "name": "Roberto Lopes", "position": "D" }, "position": "D", "shirtNumber": 4, "substitute": false, "statistics": { "minutesPlayed": 60 } },
+      { "player": { "id": 102, "name": "Graham Burke", "position": "F" }, "position": "F", "shirtNumber": 9, "substitute": false, "statistics": { "minutesPlayed": 90 } },
+      { "player": { "id": 103, "name": "Dylan Watts", "position": "M" }, "position": "M", "shirtNumber": 22, "substitute": true, "statistics": { "minutesPlayed": 30 } }
+    ]
+  },
+  "away": {
+    "formation": "4-4-2",
+    "players": [
+      { "player": { "id": 200, "name": "James Talbot", "position": "G" }, "position": "G", "shirtNumber": 1, "substitute": false, "statistics": { "minutesPlayed": 90 } },
+      { "player": { "id": 201, "name": "Rob Cornwall", "position": "D" }, "position": "D", "shirtNumber": 5, "substitute": false, "statistics": { "minutesPlayed": 90 } },
+      { "player": { "id": 203, "name": "Dawson Devoy", "position": "M" }, "position": "M", "shirtNumber": 8, "substitute": false, "statistics": { "minutesPlayed": 90 } },
+      { "player": { "id": 202, "name": "Unused Sub", "position": "F" }, "position": "F", "shirtNumber": 19, "substitute": true }
+    ]
+  }
+}

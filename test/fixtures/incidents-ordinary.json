@@ -1,0 +1,15 @@
+{
+  "incidents": [
+    { "incidentType": "period", "text": "HT", "isLive": false },
+    { "incidentType": "goal", "incidentClass": "regular", "time": 30, "isHome": true,
+      "player": { "id": 102, "name": "Graham Burke" }, "assist1": { "id": 101, "name": "Roberto Lopes" } },
+    { "incidentType": "substitution", "time": 60, "isHome": true,
+      "playerIn": { "id": 103, "name": "Dylan Watts" }, "playerOut": { "id": 101, "name": "Roberto Lopes" } },
+    { "incidentType": "goal", "incidentClass": "regular", "time": 75, "isHome": true,
+      "player": { "id": 103, "name": "Dylan Watts" } },
+    { "incidentType": "card", "incidentClass": "yellow", "time": 78, "isHome": false,
+      "player": { "id": 201, "name": "Rob Cornwall" } },
+    { "incidentType": "goal", "incidentClass": "regular", "time": 80, "isHome": false,
+      "player": { "id": 203, "name": "Dawson Devoy" } }
+  ]
+}

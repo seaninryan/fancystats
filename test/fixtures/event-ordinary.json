@@ -1,0 +1,12 @@
+{
+  "event": {
+    "id": 555,
+    "startTimestamp": 1764936000,
+    "status": { "code": 100, "type": "finished" },
+    "roundInfo": { "round": 12 },
+    "homeTeam": { "id": 1, "name": "Shamrock Rovers", "nameCode": "SRO" },
+    "awayTeam": { "id": 2, "name": "Bohemians", "nameCode": "BOH" },
+    "homeScore": { "current": 2, "period1": 1 },
+    "awayScore": { "current": 1, "period1": 0 }
+  }
+}

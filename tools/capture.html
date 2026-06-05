@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>fancystats fixture capture</title></head>
+<body style="font-family: monospace; background:#111; color:#eee; padding:20px">
+<h3>Capture SofaScore payloads for test/fixtures/</h3>
+<p>Event id: <input id="ev" value=""> <button onclick="cap()">Fetch event + lineups + incidents</button></p>
+<p>Downloads three JSON files; drop them into test/fixtures/ and write tests against them.</p>
+<script>
+const API = "https://api.sofascore.com/api/v1";
+async function grab(path, name) {
+  const r = await fetch(API + path);
+  const body = r.ok ? await r.json() : { error: r.status };
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(body, null, 2)], { type: "application/json" }));
+  a.download = name;
+  a.click();
+}
+async function cap() {
+  const id = document.getElementById("ev").value.trim();
+  await grab(`/event/${id}`, `event-${id}.json`);
+  await grab(`/event/${id}/lineups`, `lineups-${id}.json`);
+  await grab(`/event/${id}/incidents`, `incidents-${id}.json`);
+}
+</script>
+</body>
+</html>
