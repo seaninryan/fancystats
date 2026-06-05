@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { initAuth, isSignedIn, signIn, saveLatest, driveLoad, startTokenKeepAlive } from "./lib/drive.js";
-import { emptyData } from "./lib/store.js";
+import { emptyData, staleInfo } from "./lib/store.js";
 import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
 import TeamsTab from "./components/TeamsTab.jsx";
@@ -12,6 +12,8 @@ const TABS = [
   ["teams", "Teams", TeamsTab],
   ["settings", "⚙", SettingsTab],
 ];
+
+const VERSION = typeof __APP_VERSION__ !== "undefined" ? __APP_VERSION__ : "dev";
 
 export default function App() {
   const [phase, setPhase] = useState("booting"); // booting | signedout | loading | ready | gis-failed
@@ -88,9 +90,18 @@ export default function App() {
           <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>
         ))}
         <span className="dim" role="status" aria-live="polite" style={{ marginLeft: "auto", alignSelf: "center" }}>
-          {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : ""}
+          {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : `v${VERSION}`}
         </span>
       </nav>
+      {(() => {
+        const stale = staleInfo(data, Date.now());
+        return stale.count > 0 && tab !== "matches" ? (
+          <div className="banner warn" role="status">
+            Stats may be out of date — {stale.count} match{stale.count > 1 ? "es" : ""} played since the last update.{" "}
+            <button onClick={() => setTab("matches")}>Go to Matches</button>
+          </div>
+        ) : null;
+      })()}
       {authExpired && (
         <div className="banner err row" role="alert">
           Session expired — <button onClick={handleSignIn}>Reconnect</button>
