@@ -1,6 +1,6 @@
 // src/components/SettingsTab.jsx
 import { useState } from "react";
-import { parsePaste, matchPlayers } from "../lib/pasteImport.js";
+import { parsePaste, matchPlayers, suggestLinks } from "../lib/pasteImport.js";
 import { applyPasteResults } from "../lib/store.js";
 
 const KINDS = [
@@ -65,9 +65,24 @@ export default function SettingsTab({ data, update }) {
                 <select value={preview.links[i] || ""}
                   onChange={(e) => setPreview({ ...preview, links: { ...preview.links, [i]: e.target.value || undefined } })}>
                   <option value="">skip</option>
-                  {Object.entries(data.players)
-                    .sort((a, b) => a[1].name.localeCompare(b[1].name))
-                    .map(([id, p]) => <option key={id} value={id}>{p.name} ({data.teams[p.teamId]?.shortName})</option>)}
+                  {(() => {
+                    const sugg = suggestLinks(u.name, data.players);
+                    const all = Object.entries(data.players)
+                      .filter(([id]) => !sugg.includes(id))
+                      .sort((a, b) => (a[1].customName || a[1].name).localeCompare(b[1].customName || b[1].name));
+                    return (
+                      <>
+                        {sugg.length > 0 && (
+                          <optgroup label="Suggested">
+                            {sugg.map((id) => <option key={id} value={id}>{data.players[id].customName || data.players[id].name} ({data.teams[data.players[id].teamId]?.shortName})</option>)}
+                          </optgroup>
+                        )}
+                        <optgroup label="All players">
+                          {all.map(([id, p]) => <option key={id} value={id}>{p.customName || p.name} ({data.teams[p.teamId]?.shortName})</option>)}
+                        </optgroup>
+                      </>
+                    );
+                  })()}
                 </select>
               </div>
             ))}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
 import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed } from "../lib/store.js";
+import { TeamPill } from "./Pills.jsx";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -44,7 +45,6 @@ export default function MatchesTab({ data, update }) {
   const hiddenShells = all.filter((m) => isSupersededPostponed(data, m)).length;
   const matches = all.filter((m) => !isSupersededPostponed(data, m));
   const missing = matches.filter((m) => m.status === "finished" && !m.importedAt);
-  const team = (id) => data.teams[id]?.shortName || id;
   const gone = (m) => m.status === "postponed" || m.status === "canceled";
   const todo = (m) => !gone(m) && ((m.status === "finished" && !m.importedAt) || m.status === "notstarted");
 
@@ -97,7 +97,7 @@ export default function MatchesTab({ data, update }) {
           {items.map((m) => (
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
-                {team(m.homeTeamId)} {m.homeScore ?? ""}–{m.awayScore ?? ""} {team(m.awayTeamId)}
+                <TeamPill team={data.teams[m.homeTeamId]} /> {m.homeScore ?? ""}–{m.awayScore ?? ""} <TeamPill team={data.teams[m.awayTeamId]} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
               </span>
               <select

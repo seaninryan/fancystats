@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag, playerName, missingFantasyData } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
+import { PosPill } from "./Pills.jsx";
 import PlayerDetail from "./PlayerDetail.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
@@ -31,9 +32,11 @@ export default function PlayersTab({ data, update }) {
       const team = data.teams[p.teamId];
       const apps = index.get(Number(id)) || [];
       return {
-        id, name: p.name, teamId: p.teamId, team,
+        id, name: playerName(p), teamId: p.teamId, team,
         teamName: team?.shortName || "?",
         pos: p.gamePosition || "—",
+        posRaw: p.gamePosition,
+        err: missingFantasyData(p, apps),
         price: p.price, starred: p.starred, inSquad: p.inSquad,
         mi: mismatchInfo(data, id, apps), out: activeFlag(p),
         ...playerTotals(data, id, { apps }),
@@ -94,9 +97,9 @@ export default function PlayersTab({ data, update }) {
               <tr key={r.id} onClick={() => setOpenId(r.id)} style={{ cursor: "pointer" }}>
                 <td>{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
-                <td>{r.pos} <MismatchMark mi={r.mi} /></td>
+                <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
-                <td>{r.points ?? "—"}</td>
+                <td className={r.err ? "err-cell" : ""} title={r.err ? "No fantasy data — set a position or add their fantasyloi alias in the player view" : ""}>{r.err ? "❗" : r.points ?? "—"}</td>
                 <td>{r.goals}</td><td>{r.assists}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
             ))}

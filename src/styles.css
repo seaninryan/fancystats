@@ -39,3 +39,19 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .loss { color: var(--err); font-weight: 700; }
 .win-col { background: #e9f3ee; }
 th .sub { display: block; font-size: 11px; font-weight: 400; }
+
+/* always-visible horizontal scrollbars on wide tables */
+.scroll-x { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.scroll-x::-webkit-scrollbar { height: 8px; }
+.scroll-x::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
+
+.pos-gk { background: #b8860b; color: #fff; }
+.pos-def { background: #2563b8; color: #fff; }
+.pos-mid { background: #1f7a4d; color: #fff; }
+.pos-fwd { background: #c0392b; color: #fff; }
+
+.err-cell { background: #fbdcd7; }
+.upcoming-col { opacity: .55; }
+.res-w { color: var(--accent); font-weight: 600; }
+.res-d { color: var(--warn); font-weight: 600; }
+.res-l { color: var(--err); font-weight: 600; }
