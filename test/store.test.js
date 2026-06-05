@@ -6,6 +6,7 @@ import {
   applyPasteResults, matchRound, setMatchRound, playerAppearances, appearancesByPlayer,
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
   playerName, missingFantasyData, setTeamColor, roundSuspects,
+  isHot, allMatchTeamPoints,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -411,5 +412,49 @@ describe("roundSuspects", () => {
     const sus = roundSuspects(d);
     expect(sus.has(5)).toBe(false);
     expect(sus.has(6)).toBe(false);
+  });
+});
+
+describe("hot players", () => {
+  // helper: clone match 100 into new events with given goals for player 10
+  const withForm = (goalsPerMatch) => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    goalsPerMatch.forEach((g, i) => {
+      const ev = 500 + i;
+      d.matches[ev] = { ...d.matches["100"], eventId: ev, kickoff: d.matches["100"].kickoff + (i + 1) * 1000 };
+      d.appearances[`${ev}:10`] = { ...d.appearances["100:10"], eventId: ev, goals: g };
+    });
+    return d;
+  };
+  // base appearance scores: fullMatch 3 + win 2 + goals*4 (FWD) => 0 goals = 5, 1 goal = 9
+  it("hot when 2 of the last 3 score ≥8", () => {
+    const d = withForm([1, 0, 1]); // last 3 = 9, 5, 9
+    expect(isHot(d, 10)).toBe(true);
+  });
+  it("not hot when only 1 of the last 3 scores ≥8", () => {
+    const d = withForm([1, 0, 0]); // earlier 9 is pushed out of... last 3 = 9,5,5 → only 1 good
+    expect(isHot(d, 10)).toBe(false);
+  });
+  it("old form does not count — only the last 3 appearances", () => {
+    const d = withForm([1, 1, 0, 0, 0]); // last 3 = 5,5,5
+    expect(isHot(d, 10)).toBe(false);
+  });
+  it("needs a game position and at least 2 recent appearances", () => {
+    expect(isHot(importedFixture(), 10)).toBe(false); // no position
+    const d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    expect(isHot(d, 10)).toBe(false); // single appearance (scored 9, but 1 < 2 needed)
+  });
+});
+
+describe("allMatchTeamPoints", () => {
+  it("sums per-team fantasy points for each imported match", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD"); // 3+2+4 = 9
+    d = setPlayerField(d, 11, "gamePosition", "MID");                     // sub 1 + win 2 + assist 3 = 6
+    const pts = allMatchTeamPoints(d);
+    expect(pts.get(100)).toEqual({ home: 15, away: 0 });
+  });
+  it("skips positionless players and unimported matches", () => {
+    const d = importedFixture(); // nobody has a position
+    expect(allMatchTeamPoints(d).get(100)).toEqual({ home: 0, away: 0 });
   });
 });

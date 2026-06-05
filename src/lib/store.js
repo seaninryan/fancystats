@@ -295,3 +295,46 @@ export const playerName = (p) => p?.customName || p?.name || "?";
 export function missingFantasyData(player, apps) {
   return apps.length > 0 && !player?.gamePosition;
 }
+
+// 🔥 form: at least HOT_NEEDED of the player's last HOT_WINDOW appearances
+// scored ≥ HOT_THRESHOLD fantasy points.
+const HOT_THRESHOLD = 8;
+const HOT_WINDOW = 3;
+const HOT_NEEDED = 2;
+
+export function isHot(data, playerId, appsArg = null) {
+  const player = data.players[playerId];
+  if (!player?.gamePosition) return false;
+  const apps = appsArg ?? playerAppearances(data, playerId);
+  const recent = apps.slice(-HOT_WINDOW);
+  if (recent.length < HOT_NEEDED) return false;
+  let good = 0;
+  for (const a of recent) {
+    const m = data.matches[a.eventId];
+    if (!m?.goalTimes) continue;
+    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    if (scoreAppearance(a, m, player.gamePosition, adj).total >= HOT_THRESHOLD) good++;
+  }
+  return good >= HOT_NEEDED;
+}
+
+// One pass over all appearances: eventId -> { home, away } fantasy-point sums.
+// Positionless players contribute nothing (they have no computable points).
+export function allMatchTeamPoints(data) {
+  const out = new Map();
+  for (const a of Object.values(data.appearances)) {
+    const m = data.matches[a.eventId];
+    if (!m?.goalTimes) continue;
+    const p = data.players[a.playerId];
+    if (!p?.gamePosition) {
+      if (!out.has(a.eventId)) out.set(a.eventId, { home: 0, away: 0 });
+      continue;
+    }
+    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    const side = a.teamId === m.homeTeamId ? "home" : "away";
+    const t = out.get(a.eventId) || { home: 0, away: 0 };
+    t[side] += scoreAppearance(a, m, p.gamePosition, adj).total;
+    out.set(a.eventId, t);
+  }
+  return out;
+}
