@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, activeFlag, mismatchInfo, playerName } from "../lib/store.js";
+import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, playerOutNow, mismatchInfo, playerName } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
@@ -37,9 +37,13 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
   const derived = deriveRealPosition(apps);
 
   const now = Date.now();
-  const out = activeFlag(p, now);
+  const out = playerOutNow(data, playerId, now);
   const mi = mismatchInfo(data, playerId);
-  const history = (p.flags || []).filter((f) => f !== out && (f.clearedAt || (f.until && f.until <= now)));
+  const absences = Object.entries(data.absences || {})
+    .filter(([k]) => k.endsWith(`:${playerId}`) || k.endsWith(`:${Number(playerId)}`))
+    .map(([k, a]) => ({ ...a, eventId: Number(k.split(":")[0]) }))
+    .sort((a, b) => (data.matches[a.eventId]?.kickoff || 0) - (data.matches[b.eventId]?.kickoff || 0));
+  const legacyFlags = (p.flags || []);
   const upcoming = Object.values(data.matches)
     .filter((m) => (m.homeTeamId === p.teamId || m.awayTeamId === p.teamId)
       && m.kickoff > now && m.status !== "postponed" && m.status !== "canceled")
@@ -97,12 +101,19 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
           )}
         </div>
       </div>
-      {(out || history.length > 0) && (
+      {(absences.length > 0 || legacyFlags.length > 0) && (
         <div className="card">
-          {out && <div>🚫 <b>{out.note || "out"}</b> <span className="dim">
-            since {fmtD(out.setAt)}{out.until ? ` · until ${fmtD(out.until)}` : ""} — manage on the Teams page</span></div>}
-          {history.map((f, i) => (
-            <div key={i} className="dim">↳ {f.note || "out"} · {fmtD(f.setAt)} → {fmtD(f.clearedAt ?? f.until)}</div>
+          {absences.map((a) => {
+            const m = data.matches[a.eventId];
+            const future = m && m.kickoff > now && m.status !== "finished";
+            return (
+              <div key={a.eventId} className={future ? "" : "dim"}>
+                🚫 R{m ? matchRound(m) : "?"} {fmtD(m?.kickoff)} — {a.note} <span className="dim">(mark/clear on the Teams page)</span>
+              </div>
+            );
+          })}
+          {legacyFlags.map((f, i) => (
+            <div key={`f${i}`} className="dim">↳ {f.note || "out"} · {fmtD(f.setAt)} → {f.clearedAt ? fmtD(f.clearedAt) : f.until ? fmtD(f.until) : "…"} (legacy)</div>
           ))}
         </div>
       )}

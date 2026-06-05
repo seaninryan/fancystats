@@ -36,7 +36,7 @@ export default function App() {
     if (phase !== "loading") return;
     startTokenKeepAlive();
     driveLoad()
-      .then((loaded) => { setData(loaded || emptyData()); setPhase("ready"); })
+      .then((loaded) => { setData(loaded ? { ...emptyData(), ...loaded } : emptyData()); setPhase("ready"); })
       .catch(() => { setData(emptyData()); setPhase("ready"); });
   }, [phase]);
 

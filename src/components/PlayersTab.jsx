@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag, playerName, missingFantasyData, isHot } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
 
@@ -36,7 +36,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
         posRaw: p.gamePosition,
         err: missingFantasyData(p, apps),
         price: p.price, starred: p.starred, inSquad: p.inSquad,
-        mi: mismatchInfo(data, id, apps), out: activeFlag(p),
+        mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
         ...playerTotals(data, id, { apps }),
       };

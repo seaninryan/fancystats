@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { matchRound, setPlayerField, activeFlag, playerName, missingFantasyData, markOut, clearOut, setTeamColor, isHot } from "../lib/store.js";
+import { matchRound, setPlayerField, playerName, missingFantasyData, setAbsence, getAbsence, playerOutNow, setTeamColor, isHot } from "../lib/store.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { teamColor } from "../lib/teamColors.js";
 import { TeamPill, PosPill, PtsPill } from "./Pills.jsx";
@@ -44,28 +44,16 @@ const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short"
 
 const TOTAL_COLS = [["minutes", "Min"], ["goals", "G"], ["assists", "A"], ["points", "Pts"]];
 
-function OutEditor({ out, onClose, onMark, onClear }) {
-  const [note, setNote] = useState(out?.note || "");
-  const [weeks, setWeeks] = useState("");
+function AbsenceBar({ ctx, existing, defaultNote, onSave, onClear, onClose }) {
+  const [note, setNote] = useState(existing?.note ?? defaultNote);
   return (
-    <div className="row" style={{ marginTop: 4 }}>
-      {out ? (
-        <>
-          <span className="dim">{out.note || "out"}{out.until ? ` (until ${new Date(out.until).toLocaleDateString("en-IE")})` : ""}</span>
-          <button onClick={onClear}>Back available</button>
-        </>
-      ) : (
-        <>
-          <input placeholder="injured / suspended / away…" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 150 }} />
-          <select value={weeks} onChange={(e) => setWeeks(e.target.value)} title="how long are they out?">
-            <option value="">indefinite</option>
-            {[1, 2, 3, 4, 5, 6, 8, 10, 12].map((w) => <option key={w} value={w}>{w} week{w > 1 ? "s" : ""}</option>)}
-          </select>
-          <button className="primary" onClick={() => onMark(note, Number(weeks) || 0)}>OK</button>
-        </>
-      )}
-      <button onClick={onClose}>✕</button>
-    </div>
+    <form className="card row absence-bar" onSubmit={(e) => { e.preventDefault(); onSave(note); }}>
+      <span>{ctx}</span>
+      <input autoFocus placeholder="why are they out?" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+      <button className="primary" type="submit">OK</button>
+      {existing && <button type="button" onClick={onClear}>Clear</button>}
+      <button type="button" onClick={onClose}>✕</button>
+    </form>
   );
 }
 
@@ -75,7 +63,14 @@ export default function TeamsTab({ data, update, openPlayer }) {
   const [teamId, setTeamId] = useState(teamIds[0] || null);
   const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "apps", dir: -1 });
-  const [outEdit, setOutEdit] = useState(null); // pid being edited
+  const [absEdit, setAbsEdit] = useState(null); // { eventId, pid }
+  const lastNoteFor = (pid) => {
+    const mine = Object.entries(data.absences || {})
+      .filter(([k]) => k.endsWith(`:${pid}`))
+      .map(([, a]) => a)
+      .sort((a, b) => b.setAt - a.setAt);
+    return mine[0]?.note || "";
+  };
   const selected = teamId && data.teams[teamId] ? teamId : teamIds[0] || null;
   const wrapRef = useRef(null);
   const firstUpRef = useRef(null);
@@ -167,6 +162,28 @@ export default function TeamsTab({ data, update, openPlayer }) {
         )}
       </div>
       <p className="dim">● start · ◐ off · ○ on · ⚽ goal · 🥅 pen · 👟 assist · number = fantasy pts</p>
+      {absEdit && (() => {
+        const m = data.matches[absEdit.eventId];
+        const home = String(m.homeTeamId) === selected;
+        const opp = data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName;
+        const ctx = `${playerName(data.players[absEdit.pid])} · R${matchRound(m)} ${home ? "v" : "@"} ${opp}`;
+        return (
+          <AbsenceBar key={`${absEdit.eventId}:${absEdit.pid}`} ctx={ctx}
+            existing={getAbsence(data, absEdit.eventId, absEdit.pid)}
+            defaultNote={lastNoteFor(absEdit.pid)}
+            onSave={(note) => {
+              const now = Date.now();
+              update((d) => setAbsence(d, absEdit.eventId, absEdit.pid, note.trim() || null, now));
+              setAbsEdit(null);
+            }}
+            onClear={() => {
+              const now = Date.now();
+              update((d) => setAbsence(d, absEdit.eventId, absEdit.pid, null, now));
+              setAbsEdit(null);
+            }}
+            onClose={() => setAbsEdit(null)} />
+        );
+      })()}
       {matches.length === 0 ? <p className="dim">No imported matches for this team yet.</p> : (
         <div className="scroll-x scroll-xy" ref={wrapRef}>
           <table className="sticky-col">
@@ -204,7 +221,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
               {playerIds.map((pid) => {
                 const p = data.players[pid];
                 const t = totals.get(pid);
-                const out = activeFlag(p, now);
+                const out = playerOutNow(data, pid, now);
                 const err = missingFantasyData(p, apps.filter((x) => x.playerId === pid));
                 // window = the player's current team's last games (same on every page)
                 const hot = isHot(data, pid, apps.filter((x) => x.playerId === pid));
@@ -215,28 +232,11 @@ export default function TeamsTab({ data, update, openPlayer }) {
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
                       <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      <button className={`mini-toggle ${out ? "" : "off"}`} aria-pressed={!!out}
-                        title={out ? `out: ${out.note}` : "mark out"}
-                        onClick={() => setOutEdit(outEdit === pid ? null : pid)}>🚫</button>
-                      {" "}{hot ? "🔥 " : ""}<a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{hot ? "🔥 " : ""}<a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
                         onClick={() => openPlayer(String(pid))}
                         onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
                         {playerName(p) || pid}
                       </a>
-                      {outEdit === pid && (
-                        <OutEditor out={out} onClose={() => setOutEdit(null)}
-                          onMark={(note, weeks) => {
-                            const now = Date.now();
-                            const until = weeks ? now + weeks * 7 * 86400000 : null;
-                            update((d) => markOut(d, pid, note, now, until));
-                            setOutEdit(null);
-                          }}
-                          onClear={() => {
-                            const now = Date.now();
-                            update((d) => clearOut(d, pid, now));
-                            setOutEdit(null);
-                          }} />
-                      )}
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
@@ -245,23 +245,36 @@ export default function TeamsTab({ data, update, openPlayer }) {
                       const key = `${m.eventId}:${pid}`;
                       const a = byPlayerMatch.get(key);
                       const adj = data.adjustments[key];
+                      const absence = getAbsence(data, m.eventId, pid);
                       const { sym, cls, title } = cellFor(a, adj);
                       const pts = a && data.players[pid]?.gamePosition && m.goalTimes
                         ? scoreAppearance(a, m, data.players[pid].gamePosition, adj).total : null;
+                      const winCls = windowIds.has(m.eventId) && win !== "all" ? " win-col" : "";
+                      if (!a) {
+                        return (
+                          <td key={m.eventId} className={`cell-out cell-click${winCls}`}
+                            title={absence ? absence.note : "didn't play — click to note why"}
+                            onClick={() => setAbsEdit({ eventId: m.eventId, pid })}>
+                            {absence ? "🚫" : "—"}
+                          </td>
+                        );
+                      }
                       return (
-                        <td key={m.eventId}
-                          className={`${cls}${windowIds.has(m.eventId) && win !== "all" ? " win-col" : ""}`}
-                          title={title}>
-                          {sym}{a ? <> <PtsPill pts={pts} /></> : ""}
+                        <td key={m.eventId} className={`${cls}${winCls}`} title={title}>
+                          <span className="cell-wrap"><span>{sym}</span><PtsPill pts={pts} /></span>
                         </td>
                       );
                     })}
-                    {upcoming.map((m) => (
-                      <td key={m.eventId} className="upcoming-col"
-                        title={out && (out.until == null || m.kickoff < out.until) ? out.note || "out" : ""}>
-                        {out && (out.until == null || m.kickoff < out.until) ? "🚫" : "·"}
-                      </td>
-                    ))}
+                    {upcoming.map((m) => {
+                      const absence = getAbsence(data, m.eventId, pid);
+                      return (
+                        <td key={m.eventId} className="upcoming-col cell-click"
+                          title={absence ? absence.note : "click to mark out"}
+                          onClick={() => setAbsEdit({ eventId: m.eventId, pid })}>
+                          {absence ? "🚫" : "·"}
+                        </td>
+                      );
+                    })}
                   </tr>
                 );
               })}
