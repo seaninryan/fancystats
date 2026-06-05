@@ -31,6 +31,19 @@ describe("parsePaste", () => {
   it("ignores pure-number noise without a preceding name", () => {
     expect(parsePaste("2026\n\nPadraig Amond\t10")).toEqual([{ name: "Padraig Amond", value: 10 }]);
   });
+  it("vertical copies with a rank column take the last number before the next name", () => {
+    expect(parsePaste("Padraig Amond\n1\n10\nGraham Burke\n2\n9.9")).toEqual([
+      { name: "Padraig Amond", value: 10 },
+      { name: "Graham Burke", value: 9.9 },
+    ]);
+  });
+  it("parses 3-column copies (name/team/value) and rank-led rows", () => {
+    expect(parsePaste("Padraig Amond\tBohemians\t10")).toEqual([{ name: "Padraig Amond", value: 10 }]);
+    expect(parsePaste("1\tPadraig Amond\t10")).toEqual([{ name: "Padraig Amond", value: 10 }]);
+  });
+  it("drops table-header words", () => {
+    expect(parsePaste("Player\nValue\nPadraig Amond\n10")).toEqual([{ name: "Padraig Amond", value: 10 }]);
+  });
 });
 
 describe("matchPlayers", () => {
@@ -58,5 +71,14 @@ describe("matchPlayers", () => {
       [{ name: "P. O'Conor", value: 4.5 }, { name: "Nobody Real", value: 1 }], ps);
     expect(matched).toEqual([]);
     expect(unmatched.map((u) => u.name)).toEqual(["P. O'Conor", "Nobody Real"]);
+  });
+  it("two players with identical names stay unmatched, never silently matched", () => {
+    const ps = {
+      21: { name: "John Murphy", teamId: 1, pasteAlias: null },
+      22: { name: "John Murphy", teamId: 2, pasteAlias: null },
+    };
+    const { matched, unmatched } = matchPlayers([{ name: "John Murphy", value: 5 }], ps);
+    expect(matched).toEqual([]);
+    expect(unmatched.map((u) => u.name)).toEqual(["John Murphy"]);
   });
 });
