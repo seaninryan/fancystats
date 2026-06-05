@@ -8,13 +8,13 @@ INK = (23, 34, 43, 255)
 
 def draw_mark(d):
     bw, gap, base = 150, 55, S - 70
-    heights = [240, 380, 520]
+    heights = [200, 320, 440]
     for i, h in enumerate(heights):
         x = 65 + i * (bw + gap)
         d.rounded_rectangle([x, base - h, x + bw, base], radius=42, fill=GREEN)
     # football perched on the tallest bar
     cx = 65 + 2 * (bw + gap) + bw // 2
-    cy, r = base - heights[2] - 95, 88
+    cy, r = base - heights[2] - 105, 88
     d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(255, 255, 255, 255), outline=INK, width=12)
     pts = [(cx + 0.45 * r * math.sin(i * 2 * math.pi / 5),
             cy - 0.45 * r * math.cos(i * 2 * math.pi / 5)) for i in range(5)]
