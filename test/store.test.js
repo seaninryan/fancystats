@@ -120,3 +120,36 @@ describe("derived queries", () => {
     expect(positionMismatch({ gamePosition: "DEF", realPosition: null }, apps3.slice(0, 2))).toBe(false); // too few
   });
 });
+
+describe("review fixes", () => {
+  it("setAdjustment keeps boolean-false deltas (clearing an erroneous red card)", () => {
+    let d = importedFixture();
+    d.appearances["100:10"].red = true;
+    d = setPlayerField(d, 10, "gamePosition", "FWD");
+    expect(playerTotals(d, 10).points).toBe(5); // 3 fullMatch + 2 win + 4 goal − 4 red
+    d = setAdjustment(d, "100:10", { red: false, note: "card rescinded" });
+    expect(d.adjustments["100:10"]).toBeDefined();
+    expect(playerTotals(d, 10).points).toBe(9);
+  });
+  it("upsertMatchStubs keeps import-owned fields when kickoff moves", () => {
+    let d = importedFixture();
+    d = upsertMatchStubs(d, [{ eventId: 100, round: 1, kickoff: 1764999999999, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0 }], []);
+    expect(d.matches["100"].kickoff).toBe(1764999999999);
+    expect(d.matches["100"].importedAt).toBe(NOW);
+    expect(d.matches["100"].goalTimes.home).toEqual([40]);
+  });
+  it("playerTotals counts stats but no points for matches without goalTimes", () => {
+    let d = importedFixture();
+    d = setPlayerField(d, 10, "gamePosition", "FWD");
+    d = upsertMatchStubs(d, [{ eventId: 101, round: 2, kickoff: 1765000000001, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 0, awayScore: 0 }], []);
+    d.appearances["101:10"] = { ...d.appearances["100:10"], eventId: 101, goals: 0 };
+    const t = playerTotals(d, 10);
+    expect(t.points).toBe(9); // only the goalTimes-bearing match scores
+    expect(t.minutes).toBe(180);
+  });
+  it("player ids work as strings end to end", () => {
+    let d = importedFixture();
+    d = setPlayerField(d, "10", "gamePosition", "FWD");
+    expect(playerTotals(d, "10").points).toBe(9);
+  });
+});

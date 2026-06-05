@@ -30,7 +30,7 @@ export function applyImport(data, normalized, now) {
     if (k.startsWith(match.eventId + ":")) delete next.appearances[k];
   }
   next.matches[match.eventId] = { ...match, importedAt: now };
-  for (const a of appearances) next.appearances[`${a.eventId}:${a.playerId}`] = a;
+  for (const a of appearances) next.appearances[`${a.eventId}:${a.playerId}`] = { ...a };
   for (const p of players) {
     const existing = next.players[p.id];
     if (existing) { existing.name = p.name; existing.teamId = p.teamId; }
@@ -61,7 +61,10 @@ export function setPlayerField(data, playerId, field, value) {
 
 export function setAdjustment(data, key, adj) {
   const next = structuredClone(data);
-  const hasDeltas = adj && Object.keys(adj).some((k) => k !== "note" && adj[k]);
+  // booleans count as deltas even when false (e.g. clearing an erroneous red card)
+  const hasDeltas = adj && Object.entries(adj).some(
+    ([k, v]) => k !== "note" && (typeof v === "boolean" || (typeof v === "number" && v !== 0)),
+  );
   if (hasDeltas) next.adjustments[key] = adj;
   else delete next.adjustments[key];
   return next;
