@@ -480,7 +480,7 @@ git commit -m "feat: match dates, postponed badges, superseded shells hidden"
 
 ```jsx
 import { useMemo, useState } from "react";
-import { playerTotals, playerAppearances, mismatchInfo, activeFlag } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import PlayerDetail from "./PlayerDetail.jsx";
 
@@ -507,15 +507,17 @@ export default function PlayersTab({ data, update }) {
   const [openId, setOpenId] = useState(null);
 
   const rows = useMemo(() => {
+    const index = appearancesByPlayer(data); // one pass instead of N full scans
     return Object.entries(data.players).map(([id, p]) => {
       const team = data.teams[p.teamId];
+      const apps = index.get(Number(id)) || [];
       return {
         id, name: p.name, teamId: p.teamId, team,
         teamName: team?.shortName || "?",
         pos: p.gamePosition || "—",
         price: p.price, starred: p.starred, inSquad: p.inSquad,
-        mi: mismatchInfo(data, id), out: activeFlag(p),
-        ...playerTotals(data, id),
+        mi: mismatchInfo(data, id, apps), out: activeFlag(p),
+        ...playerTotals(data, id, { apps }),
       };
     });
   }, [data]);
@@ -588,7 +590,7 @@ export default function PlayersTab({ data, update }) {
 }
 ```
 
-(Note: `playerAppearances` is no longer used here — drop it from the import if unused after this change.)
+(Note: `playerAppearances` is no longer imported here — the one-pass `appearancesByPlayer` index replaces the per-player scans.)
 
 - [ ] **Step 3: PlayerDetail.jsx changes:**
 
