@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parsePaste, matchPlayers, normalizeName } from "../src/lib/pasteImport.js";
+import { parsePaste, matchPlayers, normalizeName, suggestLinks } from "../src/lib/pasteImport.js";
 
 describe("normalizeName", () => {
   it("lowercases, strips diacritics and punctuation", () => {
@@ -94,5 +94,30 @@ describe("matchPlayers", () => {
     const { matched, unmatched } = matchPlayers([{ name: "John Murphy", value: 5 }], ps);
     expect(matched).toEqual([]);
     expect(unmatched.map((u) => u.name)).toEqual(["John Murphy"]);
+  });
+});
+
+describe("suggestLinks", () => {
+  const players = {
+    30: { name: "Pico", teamId: 1, pasteAlias: null },
+    31: { name: "Graham Burke", teamId: 1, pasteAlias: null },
+    32: { name: "Aaron Greene", teamId: 1, pasteAlias: null },
+  };
+  it("ranks the shared-word candidate first (Pico Lopez → Pico)", () => {
+    expect(suggestLinks("Pico Lopez", players)[0]).toBe("30");
+  });
+  it("matches on shared surname", () => {
+    expect(suggestLinks("G. Burke", players)[0]).toBe("31");
+  });
+  it("returns empty for nothing similar", () => {
+    expect(suggestLinks("Zlatan Ibrahimović", players)).toEqual([]);
+  });
+});
+
+describe("matchPlayers with customName", () => {
+  it("matches a paste row against the user's display-name override", () => {
+    const players = { 30: { name: "Pico", customName: "Pico Lopez", teamId: 1, pasteAlias: null } };
+    const { matched } = matchPlayers([{ name: "Pico Lopez", value: 4.5 }], players);
+    expect(matched[0]?.playerId).toBe("30");
   });
 });

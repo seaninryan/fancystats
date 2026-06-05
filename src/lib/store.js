@@ -15,6 +15,7 @@ export function emptyData() {
 function defaultPlayer(p) {
   return {
     name: p.name, teamId: p.teamId,
+    customName: null,
     gamePosition: null, gamePositionSource: null, realPosition: null,
     price: null, priceUpdatedAt: null,
     starred: false, inSquad: false, pasteAlias: null, flags: [],
@@ -237,4 +238,14 @@ export function staleInfo(data, now) {
     !(m.status === "finished" && m.importedAt) &&
     !isSupersededPostponed(data, m));
   return { count: missing.length };
+}
+
+// Display name: the user's override wins (SofaScore short names like "Pico"
+// don't always match fantasyloi's, and re-imports must not clobber the fix).
+export const playerName = (p) => p?.customName || p?.name || "?";
+
+// A player who appears in matches but has no game position earns no points in
+// our model — almost always an unlinked fantasyloi identity. Surface it loudly.
+export function missingFantasyData(player, apps) {
+  return apps.length > 0 && !player?.gamePosition;
 }

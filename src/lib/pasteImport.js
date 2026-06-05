@@ -78,6 +78,7 @@ export function matchPlayers(rows, players) {
   for (const [id, p] of Object.entries(players)) {
     const norm = normalizeName(p.name);
     byFull.set(norm, [...(byFull.get(norm) || []), id]);
+    if (p.customName) byFull.set(normalizeName(p.customName), [...(byFull.get(normalizeName(p.customName)) || []), id]);
     if (p.pasteAlias) byAlias.set(normalizeName(p.pasteAlias), id);
     const key = surnameInitialKey(p.name);
     if (key) byInitial.set(key, [...(byInitial.get(key) || []), id]);
@@ -98,4 +99,24 @@ export function matchPlayers(rows, players) {
     else unmatched.push(row);
   }
   return { matched, unmatched };
+}
+
+// Candidate player ids for an unmatched paste row, best first. Shared words
+// (surnames, nicknames) score highest; containment breaks ties.
+export function suggestLinks(rowName, players) {
+  const norm = normalizeName(rowName);
+  const words = norm.split(" ").filter(Boolean);
+  return Object.entries(players)
+    .map(([id, p]) => {
+      const pn = normalizeName(p.customName || p.name);
+      if (!pn) return { id, score: 0 };
+      if (pn === norm) return { id, score: 100 };
+      const pWords = pn.split(" ").filter(Boolean);
+      let score = words.filter((w) => pWords.includes(w)).length * 10;
+      if (score && (norm.includes(pn) || pn.includes(norm))) score += 5;
+      return { id, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.id);
 }

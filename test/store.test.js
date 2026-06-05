@@ -5,6 +5,7 @@ import {
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
   applyPasteResults, matchRound, setMatchRound, playerAppearances, appearancesByPlayer,
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
+  playerName, missingFantasyData,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -316,5 +317,27 @@ describe("postponed hygiene", () => {
     d.matches["301"] = { eventId: 301, round: 2, kickoff: now - 4 * 3600 * 1000, status: "notstarted", homeTeamId: 2, awayTeamId: 1, homeScore: null, awayScore: null }; // stale stub
     d.matches["302"] = { eventId: 302, round: 3, kickoff: now + 4 * 3600 * 1000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null }; // future
     expect(staleInfo(d, now).count).toBe(2); // 300 + 301; shell 200 excluded, 302 future, 100 imported
+  });
+});
+
+describe("identity & data errors", () => {
+  it("playerName prefers customName and survives re-import", () => {
+    let d = setPlayerField(importedFixture(), 10, "customName", "Aidan Keena ✪");
+    expect(playerName(d.players["10"])).toBe("Aidan Keena ✪");
+    expect(playerName(d.players["11"])).toBe("B Burke");
+    d = applyImport(d, {
+      match: { eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0, goalTimes: { home: [40], away: [] }, partial: false },
+      teams: [], players: [{ id: 10, name: "A. Keena", teamId: 1 }], appearances: [],
+    }, NOW + 1);
+    expect(playerName(d.players["10"])).toBe("Aidan Keena ✪");
+    expect(d.players["10"].name).toBe("A. Keena");
+  });
+  it("missingFantasyData flags players with appearances but no game position", () => {
+    const d = importedFixture();
+    const apps = playerAppearances(d, 10);
+    expect(missingFantasyData(d.players["10"], apps)).toBe(true);
+    const d2 = setPlayerField(d, 10, "gamePosition", "FWD");
+    expect(missingFantasyData(d2.players["10"], apps)).toBe(false);
+    expect(missingFantasyData(d.players["10"], [])).toBe(false); // no appearances, nothing to flag
   });
 });
