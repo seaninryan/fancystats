@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
-import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed } from "../lib/store.js";
+import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed, roundSuspects } from "../lib/store.js";
 import { TeamPill } from "./Pills.jsx";
 
 const fmtDate = (ts) =>
@@ -71,6 +71,8 @@ export default function MatchesTab({ data, update }) {
   const moveMatch = (eventId, value) =>
     update((d) => setMatchRound(d, eventId, value === "" ? null : Number(value)));
 
+  const suspects = roundSuspects(data);
+
   return (
     <div>
       <div className="card row">
@@ -99,6 +101,9 @@ export default function MatchesTab({ data, update }) {
               <span style={{ flex: 1 }}>
                 <TeamPill team={data.teams[m.homeTeamId]} /> {m.homeScore ?? ""}–{m.awayScore ?? ""} <TeamPill team={data.teams[m.awayTeamId]} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
+                {suspects.has(m.eventId) && (
+                  <span className="loss" title={`date suggests Round ${suspects.get(m.eventId)} — use the selector to move it`}> ⚠R{suspects.get(m.eventId)}?</span>
+                )}
               </span>
               <select
                 title="Move to another round"
