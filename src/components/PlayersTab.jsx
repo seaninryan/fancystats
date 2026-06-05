@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag, playerName, missingFantasyData } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag, playerName, missingFantasyData, isHot } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
 
@@ -21,7 +21,7 @@ function MismatchMark({ mi }) {
 }
 
 export default function PlayersTab({ data, update, openPlayer }) {
-  const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, q: "" });
+  const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, hot: false, q: "" });
   const [sort, setSort] = useState({ key: "points", dir: -1 });
 
   const rows = useMemo(() => {
@@ -37,6 +37,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
         err: missingFantasyData(p, apps),
         price: p.price, starred: p.starred, inSquad: p.inSquad,
         mi: mismatchInfo(data, id, apps), out: activeFlag(p),
+        hot: isHot(data, id, apps),
         ...playerTotals(data, id, { apps }),
       };
     });
@@ -49,6 +50,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
       (!filters.starred || r.starred) &&
       (!filters.inSquad || r.inSquad) &&
       (!filters.mismatch || r.mi) &&
+      (!filters.hot || r.hot) &&
       (!filters.q || r.name.toLowerCase().includes(filters.q.toLowerCase())))
     .sort((a, b) => {
       const av = a[sort.key], bv = b[sort.key];
@@ -75,6 +77,8 @@ export default function PlayersTab({ data, update, openPlayer }) {
         <button className={filters.inSquad ? "primary" : ""} onClick={() => setFilters({ ...filters, inSquad: !filters.inSquad })}>My squad</button>
         <button className={filters.mismatch ? "primary" : ""} title="position mismatches only"
           onClick={() => setFilters({ ...filters, mismatch: !filters.mismatch })}>▲▼</button>
+        <button className={filters.hot ? "primary" : ""} title="in form: 8+ pts in 2 of the last 3"
+          onClick={() => setFilters({ ...filters, hot: !filters.hot })}>🔥</button>
         <input placeholder="Search" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} style={{ flex: 1, minWidth: 100 }} />
       </div>
       <div className="scroll-x">
@@ -89,7 +93,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
           <tbody>
             {shown.map((r) => (
               <tr key={r.id} onClick={() => openPlayer(r.id)} style={{ cursor: "pointer" }}>
-                <td>{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
+                <td>{r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>

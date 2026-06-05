@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
-import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed, roundSuspects } from "../lib/store.js";
-import { TeamPill } from "./Pills.jsx";
+import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
+import { TeamPill, PtsPill } from "./Pills.jsx";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -72,6 +72,7 @@ export default function MatchesTab({ data, update }) {
     update((d) => setMatchRound(d, eventId, value === "" ? null : Number(value)));
 
   const suspects = roundSuspects(data);
+  const teamPts = useMemo(() => allMatchTeamPoints(data), [data]);
 
   return (
     <div>
@@ -99,7 +100,11 @@ export default function MatchesTab({ data, update }) {
           {items.map((m) => (
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
-                <TeamPill team={data.teams[m.homeTeamId]} /> {m.homeScore ?? ""}–{m.awayScore ?? ""} <TeamPill team={data.teams[m.awayTeamId]} />
+                <TeamPill team={data.teams[m.homeTeamId]} label={data.teams[m.homeTeamId]?.name} />
+                {teamPts.has(m.eventId) && <> <PtsPill pts={teamPts.get(m.eventId).home} /></>}
+                {" "}{m.homeScore ?? ""}–{m.awayScore ?? ""}{" "}
+                {teamPts.has(m.eventId) && <><PtsPill pts={teamPts.get(m.eventId).away} /> </>}
+                <TeamPill team={data.teams[m.awayTeamId]} label={data.teams[m.awayTeamId]?.name} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
                 {suspects.has(m.eventId) && (
                   <span className="loss" title={`date suggests Round ${suspects.get(m.eventId)} — use the selector to move it`}> ⚠R{suspects.get(m.eventId)}?</span>
