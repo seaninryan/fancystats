@@ -57,7 +57,7 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
     <div>
       <div className="row"><button onClick={onBack}>←</button>
         <h3 style={{ margin: 0 }}>
-          {playerName(p)}{" "}
+          {out ? <span title={out.note}>🚫 </span> : ""}{playerName(p)}{" "}
           <TeamPill team={data.teams[p.teamId]} label={data.teams[p.teamId]?.name} />
         </h3>
       </div>
