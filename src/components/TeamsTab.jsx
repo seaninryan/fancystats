@@ -2,8 +2,19 @@ import { useState } from "react";
 import { matchRound, setPlayerField } from "../lib/store.js";
 
 // Colour = how they appeared; emoji = what they did.
-function cellFor(app) {
-  if (!app) return { sym: "—", cls: "cell-out", title: "did not play" };
+function cellFor(app0, adj) {
+  if (!app0) return { sym: "—", cls: "cell-out", title: "did not play" };
+  // Merge user adjustments so the grid agrees with PlayerDetail (e.g. pen saves
+  // only exist as adjustments — without this 🧤 could never appear).
+  let app = app0;
+  if (adj) {
+    app = { ...app0 };
+    for (const f of ["goals", "assists", "penMissed", "penSaved"]) {
+      if (typeof adj[f] === "number") app[f] = Math.max(0, (app[f] || 0) + adj[f]);
+    }
+    if (typeof adj.secondYellow === "boolean") app.secondYellow = adj.secondYellow;
+    if (typeof adj.red === "boolean") app.red = adj.red;
+  }
   const goals = app.goals || 0;
   const pens = Math.min(app.penScored || 0, goals);
   const deco =
@@ -70,14 +81,15 @@ export default function TeamsTab({ data, update }) {
                 return (
                   <tr key={pid}>
                     <td>
-                      <button className={`mini-toggle ${p?.starred ? "" : "off"}`} title="watchlist"
+                      <button className={`mini-toggle ${p?.starred ? "" : "off"}`} title="watchlist" aria-pressed={!!p?.starred}
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
-                      <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} title="in my squad"
+                      <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} title="in my squad" aria-pressed={!!p?.inSquad}
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
                       {" "}{p?.name || pid}
                     </td>
                     {matches.map((m) => {
-                      const { sym, cls, title } = cellFor(byPlayerMatch.get(`${m.eventId}:${pid}`));
+                      const key = `${m.eventId}:${pid}`;
+                      const { sym, cls, title } = cellFor(byPlayerMatch.get(key), data.adjustments[key]);
                       return <td key={m.eventId} className={cls} title={title}>{sym}</td>;
                     })}
                   </tr>

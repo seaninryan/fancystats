@@ -29,5 +29,5 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .cell-off { color: var(--warn); }
 .cell-on { color: #4a90d9; }
 .cell-out { opacity: .4; }
-.mini-toggle { padding: 1px 5px; font-size: 12px; border-radius: 6px; }
+.mini-toggle { padding: 4px 8px; font-size: 14px; border-radius: 6px; }
 .mini-toggle.off { opacity: .35; }
