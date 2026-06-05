@@ -110,9 +110,13 @@ export default function App() {
         </div>
       )}
       <main className="page">
-        {openPlayerId && data.players[openPlayerId]
-          ? <PlayerDetail data={data} update={update} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
-          : <Active data={data} update={update} openPlayer={setOpenPlayerId} />}
+        {openPlayerId && data.players[openPlayerId] && (
+          <PlayerDetail data={data} update={update} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
+        )}
+        {/* keep the tab mounted while a player is open so filters/sort survive the round-trip */}
+        <div style={{ display: openPlayerId && data.players[openPlayerId] ? "none" : undefined }}>
+          <Active data={data} update={update} openPlayer={setOpenPlayerId} />
+        </div>
       </main>
     </div>
   );
