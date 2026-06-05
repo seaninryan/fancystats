@@ -97,3 +97,34 @@ describe("concededWhileOn", () => {
     expect(concededWhileOn({ ...base, subOnMin: 46, started: false }, m)).toBe(1);
   });
 });
+
+describe("red-carded starter (current behavior — re-verify vs real gameweek in Task 13)", () => {
+  // A red card is not a substitution, so subOffMin stays null: the player is
+  // treated as on-pitch to FT for clean-sheet purposes and keeps fullMatch tier.
+  it("loses the clean sheet if the opposition scores after the dismissal", () => {
+    const m = { ...match, homeScore: 2, awayScore: 1, goalTimes: { home: [30, 75], away: [80] } };
+    const s = scoreAppearance({ ...base, red: true }, m, "DEF");
+    expect(s.breakdown.find(([r]) => r === "cleanSheet")).toBeUndefined();
+    expect(s.breakdown.find(([r]) => r === "fullMatch")[1]).toBe(3);
+  });
+  it("keeps the clean sheet if the opposition never scores", () => {
+    const s = scoreAppearance({ ...base, red: true }, match, "DEF");
+    expect(s.breakdown.find(([r]) => r === "cleanSheet")[1]).toBe(4);
+    expect(s.total).toBe(3 + 2 + 4 - 4); // fullMatch + win + CS + straight red
+  });
+});
+
+describe("invariants", () => {
+  it("total always equals the sum of breakdown points", () => {
+    const cases = [
+      [{ ...base, goals: 2, assists: 1, yellow: 1 }, "FWD"],
+      [{ ...base, started: false, subOnMin: 70, minutes: 20 }, "DEF"],
+      [{ ...base, penSaved: 1, subOffMin: 88, minutes: 88 }, "GK"],
+      [{ ...base, ownGoals: 1, penMissed: 1, red: true }, "MID"],
+    ];
+    for (const [app, pos] of cases) {
+      const s = scoreAppearance(app, match, pos);
+      expect(s.total).toBe(s.breakdown.reduce((sum, [, p]) => sum + p, 0));
+    }
+  });
+});

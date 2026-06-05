@@ -16,6 +16,7 @@ export const RULES = {
 };
 
 const STAT_FIELDS = ["goals", "assists", "ownGoals", "yellow", "penMissed", "penSaved", "minutes"];
+const CLEAN_SHEET_BY_TIER = { fullMatch: "fullMatch", startedSubbedOff: "startedPartial", sub: "sub" };
 
 function applyAdjustment(app, adj) {
   const out = { ...app };
@@ -53,8 +54,7 @@ export function scoreAppearance(app0, match, position, adjustment = null) {
   if (app.assists) br.push(["assists", app.assists * RULES.assist]);
 
   if (RULES.cleanSheet.positions.includes(position) && concededWhileOn(app, match) === 0) {
-    const key = tier === "fullMatch" ? "fullMatch" : tier === "startedSubbedOff" ? "startedPartial" : "sub";
-    br.push(["cleanSheet", RULES.cleanSheet[key]]);
+    br.push(["cleanSheet", RULES.cleanSheet[CLEAN_SHEET_BY_TIER[tier]]]);
   }
 
   if (app.ownGoals) br.push(["ownGoal", app.ownGoals * RULES.ownGoal]);
