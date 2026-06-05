@@ -200,7 +200,7 @@ export function markOut(data, playerId, note, now, until = null) {
 
 export function clearOut(data, playerId, now) {
   const next = structuredClone(data);
-  const f = next.players[playerId]?.flags?.find((x) => !x.clearedAt);
+  const f = next.players[playerId]?.flags?.find((x) => isFlagActive(x, now));
   if (!f) return data;
   f.clearedAt = now;
   return next;

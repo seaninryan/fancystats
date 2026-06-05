@@ -141,7 +141,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
         </select>
         <input type="color" title="team colour (saves when you close the picker)"
           defaultValue={teamColor(data.teams[selected]).bg.startsWith("#") ? teamColor(data.teams[selected]).bg : "#888888"}
-          key={selected}
+          key={`${selected}:${data.teams[selected]?.colorBg || "def"}`}
           onBlur={(e) => update((d) => setTeamColor(d, selected, e.target.value))} />
         <button className="mini-toggle" title="reset to default colour"
           onClick={() => update((d) => setTeamColor(d, selected, null))}>↺</button>

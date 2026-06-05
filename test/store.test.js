@@ -373,6 +373,16 @@ describe("timed availability", () => {
     const d = markOut(importedFixture(), 10, "long-term", NOW);
     expect(activeFlag(d.players["10"], NOW + 999 * 86400000)).toMatchObject({ note: "long-term" });
   });
+  it("clearOut clears the ACTIVE flag, not an older lapsed one", () => {
+    const until = NOW + 14 * 86400000;
+    let d = markOut(importedFixture(), 10, "hamstring", NOW, until);   // lapses later
+    d = markOut(d, 10, "suspended", until + 2);                        // new active flag
+    d = clearOut(d, 10, until + 3);
+    expect(activeFlag(d.players["10"], until + 3)).toBeNull();         // actually available now
+    const flags = d.players["10"].flags;
+    expect(flags.find((f) => f.note === "suspended").clearedAt).toBe(until + 3);
+    expect(flags.find((f) => f.note === "hamstring").clearedAt).toBeNull(); // lapsed naturally, untouched
+  });
 });
 
 describe("roundSuspects", () => {
