@@ -79,3 +79,42 @@ describe("edge cases", () => {
     expect(res.match.goalTimes.home).toEqual([30, 75]); // goal times still captured
   });
 });
+
+describe("real-data robustness", () => {
+  it("folds addedTime into goal and sub minutes", () => {
+    const i = structuredClone(incidents);
+    i.incidents.push(
+      { incidentType: "goal", incidentClass: "regular", time: 90, addedTime: 4, isHome: false, player: { id: 203, name: "Dawson Devoy" } },
+      { incidentType: "substitution", time: 90, addedTime: 2, isHome: true, playerIn: { id: 104, name: "Late Cameo" }, playerOut: { id: 102, name: "Graham Burke" } },
+    );
+    const l = structuredClone(lineups);
+    l.home.players.push({ player: { id: 104, name: "Late Cameo", position: "M" }, position: "M", shirtNumber: 30, substitute: true });
+    const res = run(event, l, i);
+    expect(res.match.goalTimes.away).toEqual([80, 94]);
+    expect(app(res, 104)).toMatchObject({ subOnMin: 92, minutes: 1 }); // stoppage cameo kept
+    expect(app(res, 102).subOffMin).toBe(92);
+  });
+  it("keeps a stats-present player with 0 minutes and no sub incident", () => {
+    const l = structuredClone(lineups);
+    l.away.players.push({ player: { id: 204, name: "Stoppage Cameo", position: "F" }, position: "F", shirtNumber: 21, substitute: true, statistics: { minutesPlayed: 0 } });
+    expect(app(run(event, l, incidents), 204)).toMatchObject({ started: false, minutes: 0 });
+  });
+  it("derives subOffMin from stats minutes when the sub incident is missing", () => {
+    const i = structuredClone(incidents);
+    i.incidents = i.incidents.filter((x) => x.incidentType !== "substitution");
+    const res = run(event, lineups, i);
+    expect(app(res, 101).subOffMin).toBe(60); // statistics said 60 < 90
+    expect(app(res, 103)).toMatchObject({ started: false, minutes: 30 }); // kept via stats
+  });
+  it("treats empty lineups as partial", () => {
+    const res = normalize(structuredClone(event), { confirmed: false, home: { players: [] }, away: { players: [] } }, structuredClone(incidents));
+    expect(res.match.partial).toBe(true);
+    expect(res.appearances).toEqual([]);
+  });
+  it("skips lineup rows without a player id", () => {
+    const l = structuredClone(lineups);
+    l.home.players.push({ player: null, substitute: true });
+    expect(() => run(event, l)).not.toThrow();
+    expect(run(event, l, incidents).appearances.find((a) => a.playerId == null)).toBeUndefined();
+  });
+});
