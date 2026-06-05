@@ -376,6 +376,63 @@ export function teamWindowEventIds(data, n) {
   return out;
 }
 
+// League table over imported matches. win = null (all) or N (each club's last
+// N imported games, same window the rest of the app uses). League order:
+// points, then goal difference, then goals scored.
+export function leagueTable(data, win = null) {
+  const windows = win ? teamWindowEventIds(data, win) : null;
+  const rows = new Map();
+  const row = (tid) => {
+    if (!rows.has(tid)) {
+      rows.set(tid, {
+        teamId: tid, played: 0, won: 0, drawn: 0, lost: 0, gf: 0, ga: 0, points: 0,
+        fantasy: 0, yellows: 0, reds: 0, pensScored: 0, pensMissed: 0, assists: 0,
+      });
+    }
+    return rows.get(tid);
+  };
+  for (const m of Object.values(data.matches)) {
+    if (!m.importedAt || !m.goalTimes || m.homeScore == null || m.awayScore == null) continue;
+    for (const side of ["home", "away"]) {
+      const tid = side === "home" ? m.homeTeamId : m.awayTeamId;
+      if (windows && !windows.get(tid)?.has(m.eventId)) continue;
+      const r = row(tid);
+      const gf = side === "home" ? m.homeScore : m.awayScore;
+      const ga = side === "home" ? m.awayScore : m.homeScore;
+      r.played++; r.gf += gf; r.ga += ga;
+      if (gf > ga) { r.won++; r.points += 3; }
+      else if (gf === ga) { r.drawn++; r.points += 1; }
+      else r.lost++;
+    }
+  }
+  for (const a of Object.values(data.appearances)) {
+    const m = data.matches[a.eventId];
+    if (!m?.importedAt || !m.goalTimes) continue;
+    if (windows && !windows.get(a.teamId)?.has(a.eventId)) continue;
+    const r = rows.get(a.teamId);
+    if (!r) continue;
+    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    const eff = { ...a };
+    if (adj) {
+      for (const f of ["goals", "assists", "penScored", "penMissed"]) {
+        if (typeof adj[f] === "number") eff[f] = Math.max(0, (eff[f] || 0) + adj[f]);
+      }
+      if (typeof adj.secondYellow === "boolean") eff.secondYellow = adj.secondYellow;
+      if (typeof adj.red === "boolean") eff.red = adj.red;
+    }
+    r.assists += eff.assists || 0;
+    r.yellows += (eff.yellow || 0) + (eff.secondYellow ? 1 : 0); // the second yellow is a yellow too
+    r.reds += (eff.red ? 1 : 0) + (eff.secondYellow ? 1 : 0);    // dismissals
+    r.pensScored += eff.penScored || 0;
+    r.pensMissed += eff.penMissed || 0;
+    const p = data.players[a.playerId];
+    if (p?.gamePosition) r.fantasy += scoreAppearance(a, m, p.gamePosition, adj).total;
+  }
+  return [...rows.values()].sort(
+    (x, y) => y.points - x.points || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf,
+  );
+}
+
 // One pass over all appearances: eventId -> { home, away } fantasy-point sums.
 // Positionless players contribute nothing (they have no computable points).
 export function allMatchTeamPoints(data) {

@@ -8,7 +8,7 @@ import {
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
   setAbsence, getAbsence, playerOutNow,
-  teamWindowEventIds,
+  teamWindowEventIds, leagueTable,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -515,5 +515,37 @@ describe("teamWindowEventIds", () => {
     const w = teamWindowEventIds(d, 3);
     expect([...w.get(1)].sort()).toEqual([801, 802, 803]);
     expect([...w.get(2)].sort()).toEqual([801, 802, 803]); // both clubs played the same fixtures here
+  });
+});
+
+describe("leagueTable", () => {
+  const withSecondMatch = () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    d.matches[101] = {
+      ...d.matches["100"], eventId: 101, kickoff: d.matches["100"].kickoff + 1000,
+      homeTeamId: 2, awayTeamId: 1, homeScore: 2, awayScore: 2, goalTimes: { home: [10, 20], away: [30, 40] },
+    };
+    d.appearances["101:10"] = {
+      ...d.appearances["100:10"], eventId: 101, goals: 2, penScored: 1, yellow: 1, assists: 1,
+    };
+    return d;
+  };
+  it("computes league rows with goals, results and points", () => {
+    const t = leagueTable(withSecondMatch(), null);
+    const t1 = t.find((r) => r.teamId === 1);
+    const t2 = t.find((r) => r.teamId === 2);
+    expect(t1).toMatchObject({ played: 2, won: 1, drawn: 1, lost: 0, gf: 3, ga: 2, points: 4 });
+    expect(t2).toMatchObject({ played: 2, won: 0, drawn: 1, lost: 1, gf: 2, ga: 3, points: 1 });
+    expect(t[0].teamId).toBe(1); // league order: points desc
+  });
+  it("sums fantasy points, cards, pens and assists per team", () => {
+    const t1 = leagueTable(withSecondMatch(), null).find((r) => r.teamId === 1);
+    // match 100: full match 3 + win 2 + goal 4 = 9; match 101: full match 3 + draw 1 + 2 goals 8 + assist 3 − yellow 1 = 14
+    expect(t1.fantasy).toBe(23);
+    expect(t1).toMatchObject({ yellows: 1, reds: 0, pensScored: 1, pensMissed: 0, assists: 2 });
+  });
+  it("respects the window (team's last N imported matches)", () => {
+    const t1 = leagueTable(withSecondMatch(), 1).find((r) => r.teamId === 1);
+    expect(t1).toMatchObject({ played: 1, gf: 2, ga: 2, points: 1 }); // only match 101
   });
 });

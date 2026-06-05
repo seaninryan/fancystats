@@ -5,10 +5,12 @@ import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
 import TeamsTab from "./components/TeamsTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
+import TableTab from "./components/TableTab.jsx";
 import PlayerDetail from "./components/PlayerDetail.jsx";
 
 const TABS = [
   ["matches", "Matches", MatchesTab],
+  ["table", "Table", TableTab],
   ["players", "Players", PlayersTab],
   ["teams", "Teams", TeamsTab],
   ["settings", "⚙", SettingsTab],
