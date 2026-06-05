@@ -52,7 +52,7 @@ export default function SettingsTab({ data, update }) {
           <button onClick={parse} disabled={!text.trim()}>Parse</button>
           {preview && (
             <button className="primary" onClick={apply}>
-              Apply {preview.matched.length + Object.keys(preview.links).length} players
+              Apply {preview.matched.length + Object.values(preview.links).filter(Boolean).length} players
             </button>
           )}
         </div>
