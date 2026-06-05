@@ -357,6 +357,25 @@ export function isHot(data, playerId, appsArg = null) {
   return good >= HOT_NEEDED;
 }
 
+// teamId -> Set of the team's last N imported match eventIds (the same window
+// the Teams page and isHot use). Feeds windowed totals on cross-team screens.
+export function teamWindowEventIds(data, n) {
+  const byTeam = new Map();
+  for (const m of Object.values(data.matches)) {
+    if (!m.importedAt || !m.goalTimes) continue;
+    for (const tid of [m.homeTeamId, m.awayTeamId]) {
+      if (!byTeam.has(tid)) byTeam.set(tid, []);
+      byTeam.get(tid).push(m);
+    }
+  }
+  const out = new Map();
+  for (const [tid, ms] of byTeam) {
+    ms.sort((a, b) => a.kickoff - b.kickoff);
+    out.set(tid, new Set(ms.slice(-n).map((m) => m.eventId)));
+  }
+  return out;
+}
+
 // One pass over all appearances: eventId -> { home, away } fantasy-point sums.
 // Positionless players contribute nothing (they have no computable points).
 export function allMatchTeamPoints(data) {

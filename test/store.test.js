@@ -8,6 +8,7 @@ import {
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
   setAbsence, getAbsence, playerOutNow,
+  teamWindowEventIds,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -501,5 +502,18 @@ describe("absences", () => {
   });
   it("emptyData includes the absences map", () => {
     expect(emptyData().absences).toEqual({});
+  });
+});
+
+describe("teamWindowEventIds", () => {
+  it("maps each team to its last N imported matches", () => {
+    let d = importedFixture();
+    for (let i = 0; i < 4; i++) {
+      d.matches[800 + i] = { ...d.matches["100"], eventId: 800 + i, kickoff: d.matches["100"].kickoff + (i + 1) * 1000 };
+    }
+    d.matches[900] = { eventId: 900, round: 9, kickoff: d.matches["100"].kickoff + 9000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null }; // unimported — excluded
+    const w = teamWindowEventIds(d, 3);
+    expect([...w.get(1)].sort()).toEqual([801, 802, 803]);
+    expect([...w.get(2)].sort()).toEqual([801, 802, 803]); // both clubs played the same fixtures here
   });
 });

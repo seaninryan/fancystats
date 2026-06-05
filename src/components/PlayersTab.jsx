@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
 
@@ -22,10 +22,12 @@ function MismatchMark({ mi }) {
 
 export default function PlayersTab({ data, update, openPlayer }) {
   const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, hot: false, q: "" });
+  const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "points", dir: -1 });
 
   const rows = useMemo(() => {
     const index = appearancesByPlayer(data); // one pass instead of N full scans
+    const windows = win === "all" ? null : teamWindowEventIds(data, win);
     return Object.entries(data.players).map(([id, p]) => {
       const team = data.teams[p.teamId];
       const apps = index.get(Number(id)) || [];
@@ -38,10 +40,10 @@ export default function PlayersTab({ data, update, openPlayer }) {
         price: p.price, starred: p.starred, inSquad: p.inSquad,
         mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
-        ...playerTotals(data, id, { apps }),
+        ...playerTotals(data, id, { apps, eventIds: windows ? windows.get(p.teamId) || new Set() : undefined }),
       };
     });
-  }, [data]);
+  }, [data, win]);
 
   const shown = rows
     .filter((r) =>
@@ -79,6 +81,11 @@ export default function PlayersTab({ data, update, openPlayer }) {
           onClick={() => setFilters({ ...filters, mismatch: !filters.mismatch })}>▲▼</button>
         <button className={filters.hot ? "primary" : ""} title="in form: 8+ pts in 2 of the last 3"
           onClick={() => setFilters({ ...filters, hot: !filters.hot })}>🔥</button>
+        {["all", 3, 5].map((w) => (
+          <button key={w} className={win === w ? "primary" : ""} onClick={() => setWin(w)}>
+            {w === "all" ? "All" : `Last ${w}`}
+          </button>
+        ))}
         <input placeholder="Search" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} style={{ flex: 1, minWidth: 100 }} />
       </div>
       <div className="scroll-x">
