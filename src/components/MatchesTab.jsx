@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
-import { upsertMatchStubs, applyImport, matchRound, setMatchRound } from "../lib/store.js";
+import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed } from "../lib/store.js";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -40,10 +40,13 @@ export default function MatchesTab({ data, update }) {
     setBusy(null);
   };
 
-  const matches = Object.values(data.matches);
+  const all = Object.values(data.matches);
+  const hiddenShells = all.filter((m) => isSupersededPostponed(data, m)).length;
+  const matches = all.filter((m) => !isSupersededPostponed(data, m));
   const missing = matches.filter((m) => m.status === "finished" && !m.importedAt);
   const team = (id) => data.teams[id]?.shortName || id;
-  const todo = (m) => (m.status === "finished" && !m.importedAt) || m.status === "notstarted";
+  const gone = (m) => m.status === "postponed" || m.status === "canceled";
+  const todo = (m) => !gone(m) && ((m.status === "finished" && !m.importedAt) || m.status === "notstarted");
 
   // True group-by-round (overrides included), newest round first, kickoff order within.
   const byRound = new Map();
@@ -95,7 +98,7 @@ export default function MatchesTab({ data, update }) {
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
                 {team(m.homeTeamId)} {m.homeScore ?? ""}–{m.awayScore ?? ""} {team(m.awayTeamId)}
-                {m.status !== "finished" && <span className="dim"> · {fmtDate(m.kickoff)}</span>}
+                <span className="dim"> · {fmtDate(m.kickoff)}</span>
               </span>
               <select
                 title="Move to another round"
@@ -108,7 +111,8 @@ export default function MatchesTab({ data, update }) {
                   <option key={r} value={r}>→ R{r}</option>
                 ))}
               </select>
-              {m.status !== "finished" ? <span className="dim">upcoming</span>
+              {gone(m) ? <span className="dim">postponed</span>
+                : m.status !== "finished" ? <span className="dim">upcoming</span>
                 : m.importedAt && m.partial ? (
                   <span className="row">
                     <span className="banner warn" style={{ margin: 0 }}>no lineups</span>
@@ -121,6 +125,9 @@ export default function MatchesTab({ data, update }) {
           ))}
         </section>
       ))}
+      {hiddenShells > 0 && (
+        <p className="dim">{hiddenShells} postponed duplicate{hiddenShells > 1 ? "s" : ""} hidden (rescheduled by SofaScore).</p>
+      )}
     </div>
   );
 }
