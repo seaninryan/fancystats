@@ -15,7 +15,9 @@ const CLUB_COLORS = {
 };
 
 export function teamColor(team) {
-  const known = team?.name && CLUB_COLORS[team.name];
+  const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
+  const key = team?.name && Object.keys(CLUB_COLORS).find((k) => norm(k) === norm(team.name));
+  const known = key && CLUB_COLORS[key];
   if (known) return known;
   let h = 0;
   for (const ch of team?.name || "?") h = (h * 31 + ch.charCodeAt(0)) % 360;

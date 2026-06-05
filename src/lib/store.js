@@ -93,6 +93,21 @@ export function playerAppearances(data, playerId) {
     .sort((a, b) => (data.matches[a.eventId]?.kickoff || 0) - (data.matches[b.eventId]?.kickoff || 0));
 }
 
+// One-pass index for screens that need totals/mismatch for every player —
+// avoids N full appearance scans (playerAppearances is O(all appearances) per call).
+export function appearancesByPlayer(data) {
+  const map = new Map();
+  for (const a of Object.values(data.appearances)) {
+    const arr = map.get(a.playerId);
+    if (arr) arr.push(a);
+    else map.set(a.playerId, [a]);
+  }
+  for (const arr of map.values()) {
+    arr.sort((x, y) => (data.matches[x.eventId]?.kickoff || 0) - (data.matches[y.eventId]?.kickoff || 0));
+  }
+  return map;
+}
+
 export function deriveRealPosition(apps) {
   const counts = {};
   for (const a of apps) {
@@ -118,10 +133,11 @@ export function positionMismatch(player, apps) {
 
 // opts.position: score as if the player had this position (mismatch what-ifs).
 // opts.eventIds: Set — only count appearances from these matches (windowed totals).
+// opts.apps: precomputed appearances array (avoids redundant O(n) scans).
 export function playerTotals(data, playerId, opts = {}) {
   const player = data.players[playerId];
   const position = opts.position ?? player?.gamePosition;
-  let apps = playerAppearances(data, playerId);
+  let apps = opts.apps ?? playerAppearances(data, playerId);
   if (opts.eventIds) apps = apps.filter((a) => opts.eventIds.has(a.eventId));
   const t = { minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: position ? 0 : null };
   for (const a of apps) {
@@ -160,11 +176,13 @@ export function applyPasteResults(data, matched, kind, now) {
 // ---- availability flags (user-owned; imports never touch them) ----
 
 export function markOut(data, playerId, note, now) {
+  const p0 = data.players[playerId];
+  if (!p0) return data;
+  if ((p0.flags || []).some((f) => !f.clearedAt)) return data; // already out — no change
   const next = structuredClone(data);
   const p = next.players[playerId];
-  if (!p) return data;
   p.flags = p.flags || [];
-  if (!p.flags.some((f) => !f.clearedAt)) p.flags.push({ setAt: now, clearedAt: null, note: note || "" });
+  p.flags.push({ setAt: now, clearedAt: null, note: note || "" });
   return next;
 }
 
@@ -182,17 +200,18 @@ export const activeFlag = (p) => p?.flags?.find((f) => !f.clearedAt) || null;
 
 // null when positions agree (or can't be established). delta > 0 means the game's
 // position OVERPAYS vs where they really play — a player to exploit.
-export function mismatchInfo(data, playerId) {
+export function mismatchInfo(data, playerId, apps = null) {
   const player = data.players[playerId];
   if (!player?.gamePosition) return null;
+  const theirApps = apps ?? playerAppearances(data, playerId);
   let real = player.realPosition;
   if (!real) {
-    const derived = deriveRealPosition(playerAppearances(data, playerId));
+    const derived = deriveRealPosition(theirApps);
     if (derived && derived.total >= 3) real = derived.position;
   }
   if (!real || real === player.gamePosition) return null;
-  const gamePts = playerTotals(data, playerId).points ?? 0;
-  const realPts = playerTotals(data, playerId, { position: real }).points ?? 0;
+  const gamePts = playerTotals(data, playerId, { apps: theirApps }).points ?? 0;
+  const realPts = playerTotals(data, playerId, { position: real, apps: theirApps }).points ?? 0;
   return { realPosition: real, delta: gamePts - realPts };
 }
 
@@ -202,6 +221,8 @@ export function mismatchInfo(data, playerId) {
 // shell left behind by SofaScore rescheduling (they create a new event id).
 export function isSupersededPostponed(data, m) {
   if (m.status !== "postponed" && m.status !== "canceled") return false;
+  // NOTE: pairing check is home/away order-exact — the observed SofaScore reschedule
+  // pattern keeps the venue. A venue-swapped reschedule would not be detected.
   return Object.values(data.matches).some((o) =>
     o.eventId !== m.eventId && o.status !== "postponed" && o.status !== "canceled" &&
     o.homeTeamId === m.homeTeamId && o.awayTeamId === m.awayTeamId && o.round === m.round);

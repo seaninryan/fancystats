@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   emptyData, applyImport, upsertMatchStubs, setPlayerField,
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
-  applyPasteResults, matchRound, setMatchRound, playerAppearances,
+  applyPasteResults, matchRound, setMatchRound, playerAppearances, appearancesByPlayer,
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
 } from "../src/lib/store.js";
 
@@ -269,6 +269,27 @@ describe("mismatchInfo", () => {
     expect(mismatchInfo(d, 10)).toBeNull(); // only 1 appearance, no manual realPosition
     d = setPlayerField(d, 10, "realPosition", "FWD");
     expect(mismatchInfo(d, 10)).toBeNull(); // positions agree
+  });
+});
+
+describe("review fixes 2", () => {
+  it("markOut while already out is a no-op returning the same object", () => {
+    const d = markOut(importedFixture(), 10, "first", NOW);
+    const d2 = markOut(d, 10, "second", NOW + 1);
+    expect(d2).toBe(d); // identity — no clone, no wasted Drive save
+  });
+  it("appearancesByPlayer indexes once and matches playerAppearances", () => {
+    const d = importedFixture();
+    const idx = appearancesByPlayer(d);
+    expect(idx.get(10)).toEqual(playerAppearances(d, 10));
+    expect(idx.get(11)).toHaveLength(1);
+  });
+  it("playerTotals and mismatchInfo accept a precomputed apps array", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "DEF");
+    d = setPlayerField(d, 10, "realPosition", "FWD");
+    const apps = appearancesByPlayer(d).get(10);
+    expect(playerTotals(d, 10, { apps }).points).toBe(playerTotals(d, 10).points);
+    expect(mismatchInfo(d, 10, apps)).toEqual(mismatchInfo(d, 10));
   });
 });
 
