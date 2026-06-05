@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { matchRound, setPlayerField } from "../lib/store.js";
+import { matchRound, setPlayerField, activeFlag } from "../lib/store.js";
+import { scoreAppearance } from "../lib/scoring.js";
 
 // Colour = how they appeared; emoji = what they did.
 function cellFor(app0, adj) {
@@ -37,22 +38,70 @@ function cellFor(app0, adj) {
   return { sym: `●${deco}`, cls: "cell-start", title: `full match${words ? " — " + words : ""}` };
 }
 
+const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
+
+const TOTAL_COLS = [["minutes", "Min"], ["goals", "G"], ["assists", "A"], ["points", "Pts"]];
+
 export default function TeamsTab({ data, update }) {
-  const teamIds = Object.keys(data.teams);
+  const teamIds = Object.keys(data.teams)
+    .sort((a, b) => data.teams[a].name.localeCompare(data.teams[b].name));
   const [teamId, setTeamId] = useState(teamIds[0] || null);
-  // Recover if teams arrived after mount (or the stored selection vanished).
+  const [win, setWin] = useState("all"); // "all" | 3 | 5
+  const [sort, setSort] = useState({ key: "apps", dir: -1 });
   const selected = teamId && data.teams[teamId] ? teamId : teamIds[0] || null;
 
+  const gone = (m) => m.status === "postponed" || m.status === "canceled";
   const matches = Object.values(data.matches)
     .filter((m) => m.importedAt && (String(m.homeTeamId) === selected || String(m.awayTeamId) === selected))
     .sort((a, b) => a.kickoff - b.kickoff);
 
+  const now = Date.now();
+  const nextMatch = Object.values(data.matches)
+    .filter((m) => (String(m.homeTeamId) === selected || String(m.awayTeamId) === selected)
+      && m.kickoff > now && !gone(m))
+    .sort((a, b) => a.kickoff - b.kickoff)[0];
+
+  const windowMatches = win === "all" ? matches : matches.slice(-win);
+  const windowIds = new Set(windowMatches.map((m) => m.eventId));
+
   const apps = Object.values(data.appearances).filter((a) => String(a.teamId) === selected);
   const byPlayerMatch = new Map(apps.map((a) => [`${a.eventId}:${a.playerId}`, a]));
 
-  const counts = new Map();
-  for (const a of apps) counts.set(a.playerId, (counts.get(a.playerId) || 0) + 1);
-  const playerIds = [...counts.keys()].sort((a, b) => counts.get(b) - counts.get(a));
+  // Windowed running totals per player (adjustment-aware, like PlayerDetail).
+  const totals = new Map(); // pid -> {apps, minutes, goals, assists, points|null}
+  for (const a of apps) {
+    if (!totals.has(a.playerId)) totals.set(a.playerId, { apps: 0, minutes: 0, goals: 0, assists: 0, points: null });
+    const t = totals.get(a.playerId);
+    t.apps++; // all-time, used for default row order
+    if (!windowIds.has(a.eventId)) continue;
+    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    const g = (a.goals || 0) + (typeof adj?.goals === "number" ? adj.goals : 0);
+    const as = (a.assists || 0) + (typeof adj?.assists === "number" ? adj.assists : 0);
+    t.minutes += (a.minutes || 0) + (typeof adj?.minutes === "number" ? adj.minutes : 0);
+    t.goals += Math.max(0, g);
+    t.assists += Math.max(0, as);
+    const p = data.players[a.playerId];
+    const m = data.matches[a.eventId];
+    if (p?.gamePosition && m?.goalTimes) {
+      t.points = (t.points ?? 0) + scoreAppearance(a, m, p.gamePosition, adj).total;
+    }
+  }
+
+  const playerIds = [...totals.keys()].sort((a, b) => {
+    const ta = totals.get(a), tb = totals.get(b);
+    const key = sort.key;
+    const av = ta[key], bv = tb[key];
+    if (av == null) return 1;
+    if (bv == null) return -1;
+    return (av - bv) * sort.dir;
+  });
+
+  const resultPts = (m) => {
+    const ours = String(m.homeTeamId) === selected ? m.homeScore : m.awayScore;
+    const theirs = String(m.homeTeamId) === selected ? m.awayScore : m.homeScore;
+    if (ours == null || theirs == null) return "";
+    return ours > theirs ? "+2" : ours === theirs ? "+1" : "0";
+  };
 
   const toggle = (pid, field, value) => update((d) => setPlayerField(d, pid, field, value));
 
@@ -62,35 +111,71 @@ export default function TeamsTab({ data, update }) {
         <select value={selected || ""} onChange={(e) => setTeamId(e.target.value)}>
           {teamIds.map((id) => <option key={id} value={id}>{data.teams[id].name}</option>)}
         </select>
-        <span className="dim">● start · ◐ off · ○ on · ⚽ goal · 🥅 pen · 👟 assist</span>
+        {["all", 3, 5].map((w) => (
+          <button key={w} className={win === w ? "primary" : ""} onClick={() => setWin(w)}>
+            {w === "all" ? "All" : `Last ${w}`}
+          </button>
+        ))}
+        {nextMatch && (
+          <span className="dim">
+            Next: {String(nextMatch.homeTeamId) === selected ? "v" : "@"}{" "}
+            {data.teams[String(nextMatch.homeTeamId) === selected ? nextMatch.awayTeamId : nextMatch.homeTeamId]?.shortName}
+            {" "}· {fmtD(nextMatch.kickoff)}
+          </span>
+        )}
       </div>
+      <p className="dim">● start · ◐ off · ○ on · ⚽ goal · 🥅 pen · 👟 assist · number = fantasy pts</p>
       {matches.length === 0 ? <p className="dim">No imported matches for this team yet.</p> : (
         <div className="scroll-x">
-          <table>
+          <table className="sticky-col">
             <thead><tr>
-              <th>Player</th>
+              <th onClick={() => setSort({ key: "apps", dir: -1 })}>Player</th>
+              {TOTAL_COLS.map(([key, label]) => (
+                <th key={key} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
+                  {label}{sort.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
+                </th>
+              ))}
               {matches.map((m) => {
                 const home = String(m.homeTeamId) === selected;
                 const opp = data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName;
-                return <th key={m.eventId} title={`${home ? "v" : "@"} ${opp}`}>R{matchRound(m)}</th>;
+                return (
+                  <th key={m.eventId} className={windowIds.has(m.eventId) && win !== "all" ? "win-col" : ""}
+                    title={fmtD(m.kickoff)}>
+                    R{matchRound(m)}
+                    <span className="sub">{home ? "v" : "@"}{opp} {resultPts(m)}</span>
+                  </th>
+                );
               })}
             </tr></thead>
             <tbody>
               {playerIds.map((pid) => {
                 const p = data.players[pid];
+                const t = totals.get(pid);
+                const out = activeFlag(p);
                 return (
                   <tr key={pid}>
                     <td>
-                      <button className={`mini-toggle ${p?.starred ? "" : "off"}`} title="watchlist" aria-pressed={!!p?.starred}
+                      <button className={`mini-toggle ${p?.starred ? "" : "off"}`} aria-pressed={!!p?.starred} title="watchlist"
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
-                      <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} title="in my squad" aria-pressed={!!p?.inSquad}
+                      <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      {" "}{p?.name || pid}
+                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{p?.name || pid}
                     </td>
+                    <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td><td>{t.points ?? "—"}</td>
                     {matches.map((m) => {
                       const key = `${m.eventId}:${pid}`;
-                      const { sym, cls, title } = cellFor(byPlayerMatch.get(key), data.adjustments[key]);
-                      return <td key={m.eventId} className={cls} title={title}>{sym}</td>;
+                      const a = byPlayerMatch.get(key);
+                      const adj = data.adjustments[key];
+                      const { sym, cls, title } = cellFor(a, adj);
+                      const pts = a && data.players[pid]?.gamePosition && m.goalTimes
+                        ? scoreAppearance(a, m, data.players[pid].gamePosition, adj).total : null;
+                      return (
+                        <td key={m.eventId}
+                          className={`${cls}${windowIds.has(m.eventId) && win !== "all" ? " win-col" : ""}`}
+                          title={title}>
+                          {sym}{a ? <span className="dim"> {pts ?? "·"}</span> : ""}
+                        </td>
+                      );
                     })}
                   </tr>
                 );

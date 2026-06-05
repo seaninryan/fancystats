@@ -37,3 +37,5 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .chip { padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .gain { color: var(--accent); font-weight: 700; }
 .loss { color: var(--err); font-weight: 700; }
+.win-col { background: #e9f3ee; }
+th .sub { display: block; font-size: 11px; font-weight: 400; }
