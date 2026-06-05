@@ -34,6 +34,7 @@ export default function PlayersTab({ data, update }) {
       (!filters.q || r.name.toLowerCase().includes(filters.q.toLowerCase())))
     .sort((a, b) => {
       const av = a[sort.key], bv = b[sort.key];
+      // deliberate: null prices/points always sink to the bottom, regardless of sort direction
       if (av == null) return 1;
       if (bv == null) return -1;
       return (typeof av === "string" ? av.localeCompare(bv) : av - bv) * sort.dir;

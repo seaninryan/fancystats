@@ -16,7 +16,11 @@ function AdjustForm({ adj, onSave, onCancel }) {
       </div>
       <div className="row" style={{ marginTop: 6 }}>
         <input placeholder="note (e.g. won pen)" value={note} onChange={(e) => setNote(e.target.value)} style={{ flex: 1 }} />
-        <button className="primary" onClick={() => onSave(goals || assists ? { goals, assists, note } : null)}>Save</button>
+        <button className="primary" onClick={() => {
+          const g = Number.isFinite(goals) ? goals : 0;
+          const a = Number.isFinite(assists) ? assists : 0;
+          onSave(g || a ? { goals: g, assists: a, note } : null);
+        }}>Save</button>
         <button onClick={onCancel}>Cancel</button>
       </div>
     </div>
@@ -26,6 +30,7 @@ function AdjustForm({ adj, onSave, onCancel }) {
 export default function PlayerDetail({ data, update, playerId, onBack }) {
   const [adjustKey, setAdjustKey] = useState(null);
   const p = data.players[playerId];
+  if (!p) return <div className="card dim">Player not found. <button onClick={onBack}>←</button></div>;
   const apps = playerAppearances(data, playerId);
   const derived = deriveRealPosition(apps);
   const team = (id) => data.teams[id]?.shortName || id;
