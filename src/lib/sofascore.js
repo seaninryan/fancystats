@@ -32,7 +32,7 @@ export function normalize(eventPayload, lineupsPayload, incidentsPayload) {
         positionPlayed: entry.position || entry.player.position || null,
         goals: 0, assists: 0, ownGoals: 0,
         yellow: 0, secondYellow: false, red: false,
-        penMissed: 0, penSaved: 0,
+        penMissed: 0, penSaved: 0, penScored: 0,
       });
     }
   };
@@ -53,7 +53,10 @@ export function normalize(eventPayload, lineupsPayload, incidentsPayload) {
       if (inc.incidentClass === "ownGoal") {
         stat(inc.player?.id, (a) => a.ownGoals++);
       } else {
-        stat(inc.player?.id, (a) => a.goals++);
+        stat(inc.player?.id, (a) => {
+          a.goals++;
+          if (inc.incidentClass === "penalty") a.penScored++;
+        });
         stat(inc.assist1?.id, (a) => a.assists++);
       }
     } else if (inc.incidentType === "substitution") {

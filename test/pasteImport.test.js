@@ -44,6 +44,20 @@ describe("parsePaste", () => {
   it("drops table-header words", () => {
     expect(parsePaste("Player\nValue\nPadraig Amond\n10")).toEqual([{ name: "Padraig Amond", value: 10 }]);
   });
+  it("ignores the fantasyloi 'Club Picture' image-cell text", () => {
+    const text = [
+      "Club Picture\tLuke Turner\t116",
+      "Club Picture\tDaryl Horgan\t116",
+      "Club Picture\tEd McGinty\t116",
+      "Club Picture\tHarry Wood\t115",
+    ].join("\n");
+    expect(parsePaste(text)).toEqual([
+      { name: "Luke Turner", value: 116 },
+      { name: "Daryl Horgan", value: 116 },
+      { name: "Ed McGinty", value: 116 },
+      { name: "Harry Wood", value: 115 },
+    ]);
+  });
 });
 
 describe("matchPlayers", () => {

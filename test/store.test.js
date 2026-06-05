@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   emptyData, applyImport, upsertMatchStubs, setPlayerField,
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
-  applyPasteResults,
+  applyPasteResults, matchRound, setMatchRound,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -173,5 +173,34 @@ describe("applyPasteResults", () => {
   it("remembers manual-link aliases", () => {
     const d = applyPasteResults(importedFixture(), [{ playerId: "10", name: "A. Keena (FLOI)", value: 9.5, alias: "A. Keena (FLOI)" }], "price", NOW);
     expect(d.players["10"].pasteAlias).toBe("A. Keena (FLOI)");
+  });
+});
+
+describe("round overrides", () => {
+  it("matchRound prefers the user override", () => {
+    expect(matchRound({ round: 12 })).toBe(12);
+    expect(matchRound({ round: 12, roundOverride: 14 })).toBe(14);
+  });
+  it("setMatchRound sets and clears the override", () => {
+    let d = importedFixture();
+    d = setMatchRound(d, 100, 14);
+    expect(matchRound(d.matches["100"])).toBe(14);
+    d = setMatchRound(d, 100, null);
+    expect(d.matches["100"].roundOverride).toBeUndefined();
+    expect(matchRound(d.matches["100"])).toBe(1);
+  });
+  it("setting the override to the natural round clears it", () => {
+    let d = setMatchRound(importedFixture(), 100, 1);
+    expect(d.matches["100"].roundOverride).toBeUndefined();
+  });
+  it("roundOverride survives re-import and re-sync", () => {
+    let d = setMatchRound(importedFixture(), 100, 14);
+    d = applyImport(d, {
+      match: { eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0, goalTimes: { home: [40], away: [] }, partial: false },
+      teams: [], players: [], appearances: [],
+    }, NOW + 5);
+    expect(matchRound(d.matches["100"])).toBe(14);
+    d = upsertMatchStubs(d, [{ eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0 }], []);
+    expect(matchRound(d.matches["100"])).toBe(14);
   });
 });

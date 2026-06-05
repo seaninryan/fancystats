@@ -19,7 +19,7 @@ const NUM_RE = /^\d+(?:\.\d+)?$/;
 // Table-furniture words that must never be taken as a player name.
 const STOPWORDS = new Set([
   "player", "players", "player stats", "value", "statistic", "statistics",
-  "points", "price", "club", "position", "total score", "selected by",
+  "points", "price", "club", "club picture", "position", "total score", "selected by",
 ]);
 
 const isStopword = (s) => STOPWORDS.has(normalizeName(s));

@@ -78,6 +78,13 @@ describe("edge cases", () => {
     expect(res.appearances).toEqual([]);
     expect(res.match.goalTimes.home).toEqual([30, 75]); // goal times still captured
   });
+  it("tracks penalty goals separately as penScored", () => {
+    const i = structuredClone(incidents);
+    i.incidents.push({ incidentType: "goal", incidentClass: "penalty", time: 85, isHome: true, player: { id: 102, name: "Graham Burke" } });
+    const res = run(event, lineups, i);
+    expect(app(res, 102)).toMatchObject({ goals: 2, penScored: 1 }); // open-play 30' + pen 85'
+    expect(res.match.goalTimes.home).toEqual([30, 75, 85]);
+  });
 });
 
 describe("real-data robustness", () => {

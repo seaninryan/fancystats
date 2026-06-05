@@ -29,7 +29,10 @@ export function applyImport(data, normalized, now) {
   for (const k of Object.keys(next.appearances)) {
     if (k.startsWith(match.eventId + ":")) delete next.appearances[k];
   }
+  const prevMatch = next.matches[match.eventId];
   next.matches[match.eventId] = { ...match, importedAt: now };
+  // user-owned match field survives re-import, like player edits do
+  if (prevMatch?.roundOverride != null) next.matches[match.eventId].roundOverride = prevMatch.roundOverride;
   for (const a of appearances) next.appearances[`${a.eventId}:${a.playerId}`] = { ...a };
   for (const p of players) {
     const existing = next.players[p.id];
@@ -47,6 +50,20 @@ export function upsertMatchStubs(data, stubs, teams) {
     const prev = next.matches[s.eventId] || {};
     next.matches[s.eventId] = { ...prev, ...s }; // preserves importedAt/goalTimes/partial when present
   }
+  return next;
+}
+
+// Effective gameweek: the user's override wins (matches get moved, double weeks happen).
+export function matchRound(m) {
+  return m.roundOverride ?? m.round;
+}
+
+export function setMatchRound(data, eventId, round) {
+  const next = structuredClone(data);
+  const m = next.matches[eventId];
+  if (!m) return data;
+  if (round == null || round === m.round) delete m.roundOverride;
+  else m.roundOverride = round;
   return next;
 }
 
