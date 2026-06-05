@@ -89,7 +89,7 @@ export default function App() {
     <div>
       <nav className="tabs">
         {TABS.map(([key, label]) => (
-          <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setOpenPlayerId(null); }}>{label}</button>
+          <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setOpenPlayerId(null); window.scrollTo({ top: 0 }); }}>{label}</button>
         ))}
         <span className="dim" role="status" aria-live="polite" style={{ marginLeft: "auto", alignSelf: "center" }}>
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : `v${VERSION}`}

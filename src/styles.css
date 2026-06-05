@@ -55,3 +55,6 @@ th .sub { display: block; font-size: 11px; font-weight: 400; }
 .res-w { color: var(--accent); font-weight: 600; }
 .res-d { color: var(--warn); font-weight: 600; }
 .res-l { color: var(--err); font-weight: 600; }
+/* both-axis scroll container that keeps its scrollbars on screen */
+.scroll-xy { overflow: auto; max-height: calc(100vh - 200px); }
+.sticky-col th:first-child { z-index: 3; } /* corner above sticky header AND column */
