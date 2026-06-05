@@ -296,7 +296,7 @@ export function missingFantasyData(player, apps) {
   return apps.length > 0 && !player?.gamePosition;
 }
 
-// 🔥 form: at least HOT_NEEDED of the player's last HOT_WINDOW appearances
+// 🔥 form: at least HOT_NEEDED of the player's TEAM's last HOT_WINDOW matches
 // scored ≥ HOT_THRESHOLD fantasy points.
 const HOT_THRESHOLD = 8;
 const HOT_WINDOW = 3;
@@ -305,13 +305,20 @@ const HOT_NEEDED = 2;
 export function isHot(data, playerId, appsArg = null) {
   const player = data.players[playerId];
   if (!player?.gamePosition) return false;
+  // Window = the player's CURRENT team's last HOT_WINDOW imported matches (same on
+  // every page). Missing one of those games consumes a slot — sitting out cools you
+  // off — but a blank week for the whole team doesn't.
+  const teamMatches = Object.values(data.matches)
+    .filter((m) => m.importedAt && m.goalTimes && (m.homeTeamId === player.teamId || m.awayTeamId === player.teamId))
+    .sort((a, b) => a.kickoff - b.kickoff)
+    .slice(-HOT_WINDOW);
+  if (teamMatches.length < HOT_NEEDED) return false;
   const apps = appsArg ?? playerAppearances(data, playerId);
-  const recent = apps.slice(-HOT_WINDOW);
-  if (recent.length < HOT_NEEDED) return false;
+  const byEvent = new Map(apps.map((a) => [a.eventId, a]));
   let good = 0;
-  for (const a of recent) {
-    const m = data.matches[a.eventId];
-    if (!m?.goalTimes) continue;
+  for (const m of teamMatches) {
+    const a = byEvent.get(m.eventId);
+    if (!a) continue; // didn't play that one
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
     if (scoreAppearance(a, m, player.gamePosition, adj).total >= HOT_THRESHOLD) good++;
   }

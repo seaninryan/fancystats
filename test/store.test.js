@@ -444,6 +444,17 @@ describe("hot players", () => {
     const d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
     expect(isHot(d, 10)).toBe(false); // single appearance (scored 9, but 1 < 2 needed)
   });
+  it("missed team games cool a player off (window = team's last 3 games)", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    // the team plays 4 more matches; the player appears (scoring 9) only in the first
+    for (let i = 0; i < 4; i++) {
+      const ev = 600 + i;
+      d.matches[ev] = { ...d.matches["100"], eventId: ev, kickoff: d.matches["100"].kickoff + (i + 1) * 1000 };
+    }
+    d.appearances["600:10"] = { ...d.appearances["100:10"], eventId: 600 }; // 9 pts
+    // last 3 APPEARANCES are two 9-pointers — but the team's last 3 games (601-603) include none of them
+    expect(isHot(d, 10)).toBe(false);
+  });
 });
 
 describe("allMatchTeamPoints", () => {

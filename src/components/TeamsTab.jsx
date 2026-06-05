@@ -206,7 +206,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
                 const t = totals.get(pid);
                 const out = activeFlag(p, now);
                 const err = missingFantasyData(p, apps.filter((x) => x.playerId === pid));
-                // team-scoped apps: 🔥 here reflects form FOR THIS TEAM (can differ from Players tab for transfers)
+                // window = the player's current team's last games (same on every page)
                 const hot = isHot(data, pid, apps.filter((x) => x.playerId === pid));
                 return (
                   <tr key={pid}>
