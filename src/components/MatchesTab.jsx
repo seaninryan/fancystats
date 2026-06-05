@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
-import { upsertMatchStubs, applyImport } from "../lib/store.js";
+import { upsertMatchStubs, applyImport, matchRound, setMatchRound } from "../lib/store.js";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -8,6 +8,7 @@ const fmtDate = (ts) =>
 export default function MatchesTab({ data, update }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
+  const currentRef = useRef(null);
 
   const sync = async () => {
     setBusy("Checking for matches…"); setError(null);
@@ -23,7 +24,6 @@ export default function MatchesTab({ data, update }) {
     setBusy(null);
   };
 
-  // Sequential, polite (300ms gap); one state update + Drive save for the whole batch.
   const runImport = async (eventIds) => {
     setError(null);
     const results = [];
@@ -40,16 +40,33 @@ export default function MatchesTab({ data, update }) {
     setBusy(null);
   };
 
-  const matches = Object.values(data.matches).sort((a, b) => b.kickoff - a.kickoff);
+  const matches = Object.values(data.matches);
   const missing = matches.filter((m) => m.status === "finished" && !m.importedAt);
   const team = (id) => data.teams[id]?.shortName || id;
+  const todo = (m) => (m.status === "finished" && !m.importedAt) || m.status === "notstarted";
 
-  const rounds = [];
+  // True group-by-round (overrides included), newest round first, kickoff order within.
+  const byRound = new Map();
   for (const m of matches) {
-    const last = rounds[rounds.length - 1];
-    if (last && last.round === m.round) last.items.push(m);
-    else rounds.push({ round: m.round, items: [m] });
+    const r = matchRound(m);
+    if (!byRound.has(r)) byRound.set(r, []);
+    byRound.get(r).push(m);
   }
+  const rounds = [...byRound.entries()]
+    .map(([round, items]) => ({ round, items: items.sort((a, b) => a.kickoff - b.kickoff) }))
+    .sort((a, b) => (b.round ?? -1) - (a.round ?? -1));
+  const allRounds = rounds.map((r) => r.round).filter((r) => r != null).sort((a, b) => a - b);
+  // Current gameweek = earliest round that still has something to do.
+  const currentRound = rounds.length
+    ? Math.min(...rounds.filter((r) => r.items.some(todo)).map((r) => r.round ?? Infinity))
+    : null;
+
+  useEffect(() => {
+    currentRef.current?.scrollIntoView({ block: "start" });
+  }, []); // on mount only — jump to the current gameweek
+
+  const moveMatch = (eventId, value) =>
+    update((d) => setMatchRound(d, eventId, value === "" ? null : Number(value)));
 
   return (
     <div>
@@ -68,7 +85,11 @@ export default function MatchesTab({ data, update }) {
       {error && <div className="banner err">{error}</div>}
       {matches.length === 0 && <p className="dim">No matches yet — tap "Check for new matches".</p>}
       {rounds.map(({ round, items }) => (
-        <section key={`${round ?? "none"}-${items[0].eventId}`}>
+        <section
+          key={round ?? "none"}
+          ref={round === currentRound ? currentRef : null}
+          style={{ scrollMarginTop: 56 }}
+        >
           <h3>Round {round ?? "?"} <span className="dim">— {fmtDate(items[0].kickoff)}</span></h3>
           {items.map((m) => (
             <div key={m.eventId} className="card row">
@@ -76,6 +97,17 @@ export default function MatchesTab({ data, update }) {
                 {team(m.homeTeamId)} {m.homeScore ?? ""}–{m.awayScore ?? ""} {team(m.awayTeamId)}
                 {m.status !== "finished" && <span className="dim"> · {fmtDate(m.kickoff)}</span>}
               </span>
+              <select
+                title="Move to another round"
+                value={m.roundOverride ?? ""}
+                onChange={(e) => moveMatch(m.eventId, e.target.value)}
+                disabled={!!busy}
+              >
+                <option value="">R{m.round ?? "?"}</option>
+                {allRounds.filter((r) => r !== m.round).map((r) => (
+                  <option key={r} value={r}>→ R{r}</option>
+                ))}
+              </select>
               {m.status !== "finished" ? <span className="dim">upcoming</span>
                 : m.importedAt && m.partial ? (
                   <span className="row">
