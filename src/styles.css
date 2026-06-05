@@ -25,3 +25,9 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .banner.err { background: #3a1510; color: #ff8a73; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .scroll-x { overflow-x: auto; }
+.cell-start { color: var(--accent); }
+.cell-off { color: var(--warn); }
+.cell-on { color: #4a90d9; }
+.cell-out { opacity: .4; }
+.mini-toggle { padding: 1px 5px; font-size: 12px; border-radius: 6px; }
+.mini-toggle.off { opacity: .35; }

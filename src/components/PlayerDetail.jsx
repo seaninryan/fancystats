@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition } from "../lib/store.js";
+import { matchRound, setPlayerField, setAdjustment, playerAppearances, deriveRealPosition } from "../lib/store.js";
 import { scoreAppearance } from "../lib/scoring.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
@@ -72,7 +72,7 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
               const opp = a.teamId === m?.homeTeamId ? `v ${team(m?.awayTeamId)}` : `@ ${team(m?.homeTeamId)}`;
               return (
                 <tr key={key}>
-                  <td>R{m?.round} {opp}</td>
+                  <td>R{m ? matchRound(m) : "?"} {opp}</td>
                   <td>{a.minutes + (adj?.minutes || 0)}</td>
                   <td>{a.goals + (adj?.goals || 0)}{adj?.goals ? "✏" : ""}</td>
                   <td>{a.assists + (adj?.assists || 0)}{adj?.assists ? "✏" : ""}</td>
