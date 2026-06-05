@@ -12,6 +12,8 @@ let accessToken = null;
 let tokenExp = 0;
 let fileId = null;
 let onAuthExpired = null;
+let keepAliveStarted = false;
+let pendingTokenRequest = null;
 
 function rememberToken(resp) {
   accessToken = resp.access_token;
@@ -28,10 +30,17 @@ function recallToken() {
   return null;
 }
 
+function forgetToken() {
+  accessToken = null;
+  tokenExp = 0;
+  sessionStorage.removeItem(TOK_KEY);
+}
+
 // Resolves true when GIS is ready. Call once at app start.
 export function initAuth(handlers = {}) {
   onAuthExpired = handlers.onAuthExpired || null;
   accessToken = recallToken();
+  if (tokenClient) return Promise.resolve(true);
   return new Promise((resolve) => {
     const started = Date.now();
     const poll = setInterval(() => {
@@ -56,18 +65,24 @@ export function isSignedIn() {
 }
 
 function requestToken(opts = {}) {
-  return new Promise((resolve) => {
-    if (!tokenClient) return resolve(false);
+  if (!tokenClient) return Promise.resolve(false);
+  if (pendingTokenRequest) return pendingTokenRequest; // a keep-alive tick must not clobber an in-flight request
+  pendingTokenRequest = new Promise((resolve) => {
     tokenClient.callback = (resp) => {
       if (resp.access_token) { rememberToken(resp); resolve(true); } else resolve(false);
     };
     tokenClient.error_callback = () => resolve(false);
     tokenClient.requestAccessToken(opts);
-  });
+  }).finally(() => { pendingTokenRequest = null; });
+  return pendingTokenRequest;
 }
 
 export const signIn = () => requestToken(); // user gesture -> consent popup allowed
-const reauth = () => requestToken({ prompt: "" }); // silent
+async function reauth() {
+  const ok = await requestToken({ prompt: "" }); // silent
+  if (!ok) forgetToken(); // keep isSignedIn() honest after a rejected refresh
+  return ok;
+}
 
 // Roll the token if it expires soon. Call before save bursts.
 export async function ensureFreshToken() {
@@ -84,7 +99,7 @@ async function dfetch(url, opts) {
 async function ensureFile() {
   if (fileId) return fileId;
   const q = encodeURIComponent(`name='${FILE_NAME}'`);
-  const r = await dfetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}`);
+  const r = await dfetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name)`);
   const j = await r.json();
   if (j.files?.length) { fileId = j.files[0].id; return fileId; }
   const cr = await dfetch("https://www.googleapis.com/drive/v3/files", {
@@ -118,16 +133,20 @@ export async function saveWithRetry(data) {
   await ensureFreshToken();
   try { await driveSave(data); return true; }
   catch (e) {
-    if (e.code === 401 && (await reauth())) {
-      try { await driveSave(data); return true; } catch { /* fall through */ }
+    if (e.code === 401) {
+      if (await reauth()) {
+        try { await driveSave(data); return true; } catch (e2) { e = e2; }
+      }
+      if (e.code === 401 && onAuthExpired) onAuthExpired();
     }
-    if (onAuthExpired) onAuthExpired();
-    return false;
+    return false; // non-auth failures surface via the caller's save-state, not the reconnect banner
   }
 }
 
 // Background keep-alive: silent reauth when <12 min left. Call once after sign-in.
 export function startTokenKeepAlive() {
+  if (keepAliveStarted) return; // StrictMode/remounts must not stack intervals
+  keepAliveStarted = true;
   const tick = () => {
     if (accessToken && tokenExp - Date.now() < 12 * 60 * 1000) reauth();
   };
