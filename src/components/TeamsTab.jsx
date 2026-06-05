@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { matchRound, setPlayerField, activeFlag } from "../lib/store.js";
+import { matchRound, setPlayerField, activeFlag, playerName, missingFantasyData } from "../lib/store.js";
 import { scoreAppearance } from "../lib/scoring.js";
+import { TeamPill, PosPill } from "./Pills.jsx";
 
 // Colour = how they appeared; emoji = what they did.
 function cellFor(app0, adj) {
@@ -56,13 +57,15 @@ export default function TeamsTab({ data, update }) {
     .sort((a, b) => a.kickoff - b.kickoff);
 
   const now = Date.now();
-  const nextMatch = Object.values(data.matches)
-    .filter((m) => (String(m.homeTeamId) === selected || String(m.awayTeamId) === selected)
-      && m.kickoff > now && !gone(m))
-    .sort((a, b) => a.kickoff - b.kickoff)[0];
 
   const windowMatches = win === "all" ? matches : matches.slice(-win);
   const windowIds = new Set(windowMatches.map((m) => m.eventId));
+  const upcoming = Object.values(data.matches)
+    .filter((m) => (String(m.homeTeamId) === selected || String(m.awayTeamId) === selected)
+      && m.kickoff > now && !gone(m))
+    .sort((a, b) => a.kickoff - b.kickoff)
+    .slice(0, 3);
+  const nextMatch = upcoming[0];
 
   const apps = Object.values(data.appearances).filter((a) => String(a.teamId) === selected);
   const byPlayerMatch = new Map(apps.map((a) => [`${a.eventId}:${a.playerId}`, a]));
@@ -96,11 +99,12 @@ export default function TeamsTab({ data, update }) {
     return (av - bv) * sort.dir;
   });
 
+  const RESULT_TIP = "team result points: win +2 · draw +1 · loss 0 (every appearing player gets them)";
   const resultPts = (m) => {
     const ours = String(m.homeTeamId) === selected ? m.homeScore : m.awayScore;
     const theirs = String(m.homeTeamId) === selected ? m.awayScore : m.homeScore;
-    if (ours == null || theirs == null) return "";
-    return ours > theirs ? "+2" : ours === theirs ? "+1" : "0";
+    if (ours == null || theirs == null) return null;
+    return ours > theirs ? { txt: "+2", cls: "res-w" } : ours === theirs ? { txt: "+1", cls: "res-d" } : { txt: "0", cls: "res-l" };
   };
 
   const toggle = (pid, field, value) => update((d) => setPlayerField(d, pid, field, value));
@@ -119,7 +123,7 @@ export default function TeamsTab({ data, update }) {
         {nextMatch && (
           <span className="dim">
             Next: {String(nextMatch.homeTeamId) === selected ? "v" : "@"}{" "}
-            {data.teams[String(nextMatch.homeTeamId) === selected ? nextMatch.awayTeamId : nextMatch.homeTeamId]?.shortName}
+            <TeamPill team={data.teams[String(nextMatch.homeTeamId) === selected ? nextMatch.awayTeamId : nextMatch.homeTeamId]} />
             {" "}· {fmtD(nextMatch.kickoff)}
           </span>
         )}
@@ -130,6 +134,7 @@ export default function TeamsTab({ data, update }) {
           <table className="sticky-col">
             <thead><tr>
               <th onClick={() => setSort({ key: "apps", dir: -1 })}>Player</th>
+              <th>Pos</th>
               {TOTAL_COLS.map(([key, label]) => (
                 <th key={key} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
                   {label}{sort.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
@@ -138,11 +143,21 @@ export default function TeamsTab({ data, update }) {
               {matches.map((m) => {
                 const home = String(m.homeTeamId) === selected;
                 const opp = data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName;
+                const rp = resultPts(m);
                 return (
                   <th key={m.eventId} className={windowIds.has(m.eventId) && win !== "all" ? "win-col" : ""}
-                    title={fmtD(m.kickoff)}>
+                    title={`${fmtD(m.kickoff)} — ${RESULT_TIP}`}>
                     R{matchRound(m)}
-                    <span className="sub">{home ? "v" : "@"}{opp} {resultPts(m)}</span>
+                    <span className="sub">{home ? "v" : "@"}{opp} {rp && <span className={rp.cls}>{rp.txt}</span>}</span>
+                  </th>
+                );
+              })}
+              {upcoming.map((m) => {
+                const home = String(m.homeTeamId) === selected;
+                return (
+                  <th key={m.eventId} className="upcoming-col" title={fmtD(m.kickoff)}>
+                    R{matchRound(m)}
+                    <span className="sub">{home ? "v" : "@"}{data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName}</span>
                   </th>
                 );
               })}
@@ -152,6 +167,7 @@ export default function TeamsTab({ data, update }) {
                 const p = data.players[pid];
                 const t = totals.get(pid);
                 const out = activeFlag(p);
+                const err = missingFantasyData(p, apps.filter((x) => x.playerId === pid));
                 return (
                   <tr key={pid}>
                     <td>
@@ -159,9 +175,11 @@ export default function TeamsTab({ data, update }) {
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
                       <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{p?.name || pid}
+                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{playerName(p) || pid}
                     </td>
-                    <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td><td>{t.points ?? "—"}</td>
+                    <td><PosPill pos={p?.gamePosition} /></td>
+                    <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
+                    <td className={err ? "err-cell" : ""} title={err ? "No fantasy data — set a position or add their fantasyloi alias in the player view" : ""}>{err ? "❗" : t.points ?? "—"}</td>
                     {matches.map((m) => {
                       const key = `${m.eventId}:${pid}`;
                       const a = byPlayerMatch.get(key);
@@ -177,6 +195,7 @@ export default function TeamsTab({ data, update }) {
                         </td>
                       );
                     })}
+                    {upcoming.map((m) => <td key={m.eventId} className="upcoming-col">·</td>)}
                   </tr>
                 );
               })}

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, markOut, clearOut, activeFlag, mismatchInfo } from "../lib/store.js";
+import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, markOut, clearOut, activeFlag, mismatchInfo, playerName } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
+import { TeamPill, PosPill } from "./Pills.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 
@@ -61,7 +62,6 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
   if (!p) return <div className="card dim">Player not found. <button onClick={onBack}>←</button></div>;
   const apps = playerAppearances(data, playerId);
   const derived = deriveRealPosition(apps);
-  const team = (id) => data.teams[id]?.shortName || id;
 
   const out = activeFlag(p);
   const mi = mismatchInfo(data, playerId);
@@ -80,16 +80,27 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
     <div>
       <div className="row"><button onClick={onBack}>←</button>
         <h3 style={{ margin: 0 }}>
-          {p.name}{" "}
-          <span className="chip" style={{ background: teamColor(data.teams[p.teamId]).bg, color: teamColor(data.teams[p.teamId]).fg }}>
-            {data.teams[p.teamId]?.name}
-          </span>
+          {playerName(p)}{" "}
+          <TeamPill team={data.teams[p.teamId]} label={data.teams[p.teamId]?.name} />
         </h3>
       </div>
       <div className="card row">
         <button className={p.starred ? "primary" : ""} onClick={() => setField("starred", !p.starred)}>⭐ watch</button>
         <button className={p.inSquad ? "primary" : ""} onClick={() => setField("inSquad", !p.inSquad)}>🔵 in squad</button>
         <span className="dim">€{p.price ?? "?"}</span>
+      </div>
+      <div className="card row">
+        <label>Display name{" "}
+          <input defaultValue={playerName(p)} style={{ width: 150 }}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              setField("customName", v && v !== p.name ? v : null);
+            }} />
+        </label>
+        <label>fantasyloi alias{" "}
+          <input defaultValue={p.pasteAlias || ""} placeholder="name used on fantasyloi" style={{ width: 170 }}
+            onBlur={(e) => setField("pasteAlias", e.target.value.trim() || null)} />
+        </label>
       </div>
       <div className="card">
         <div className="row">
@@ -98,12 +109,14 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
               <option value="">—</option>{POSITIONS.map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
+          <PosPill pos={p.gamePosition} />
           <label>Real pos:
             <select value={p.realPosition || ""} onChange={(e) => setField("realPosition", e.target.value || null)}>
               <option value="">auto{derived ? `: ${derived.position} (${derived.count}/${derived.total})` : ""}</option>
               {POSITIONS.map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
+          <PosPill pos={p.realPosition || derived?.position} />
           {mi && (
             <span className={mi.delta >= 0 ? "gain" : "loss"}>
               {mi.delta >= 0 ? "▲" : "▼"} game position pays {mi.delta >= 0 ? "+" : ""}{mi.delta} pts vs {mi.realPosition}
@@ -132,10 +145,9 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
               const key = `${a.eventId}:${a.playerId}`;
               const adj = data.adjustments[key];
               const score = p.gamePosition && m?.goalTimes ? scoreAppearance(a, m, p.gamePosition, adj) : null;
-              const opp = a.teamId === m?.homeTeamId ? `v ${team(m?.awayTeamId)}` : `@ ${team(m?.homeTeamId)}`;
               return (
                 <tr key={key}>
-                  <td>R{m ? matchRound(m) : "?"} {opp}</td>
+                  <td>R{m ? matchRound(m) : "?"} {a.teamId === m?.homeTeamId ? "v" : "@"} <TeamPill team={data.teams[a.teamId === m?.homeTeamId ? m?.awayTeamId : m?.homeTeamId]} /></td>
                   <td>{a.minutes + (adj?.minutes || 0)}</td>
                   <td>{a.goals + (adj?.goals || 0)}{adj?.goals ? "✏" : ""}</td>
                   <td>{a.assists + (adj?.assists || 0)}{adj?.assists ? "✏" : ""}</td>
