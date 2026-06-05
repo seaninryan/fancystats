@@ -5,7 +5,7 @@ import {
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
   applyPasteResults, matchRound, setMatchRound, playerAppearances, appearancesByPlayer,
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
-  playerName, missingFantasyData,
+  playerName, missingFantasyData, setTeamColor, roundSuspects,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -339,5 +339,67 @@ describe("identity & data errors", () => {
     const d2 = setPlayerField(d, 10, "gamePosition", "FWD");
     expect(missingFantasyData(d2.players["10"], apps)).toBe(false);
     expect(missingFantasyData(d.players["10"], [])).toBe(false); // no appearances, nothing to flag
+  });
+});
+
+describe("team customization", () => {
+  it("setTeamColor sets and clears a user colour that survives sync and import", () => {
+    let d = setTeamColor(importedFixture(), 1, "#123456");
+    expect(d.teams["1"].colorBg).toBe("#123456");
+    d = upsertMatchStubs(d, [], [{ id: 1, name: "Shamrock Rovers", shortName: "SRO" }]);
+    expect(d.teams["1"].colorBg).toBe("#123456");
+    d = applyImport(d, {
+      match: { eventId: 101, round: 2, kickoff: 1, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 0, awayScore: 0, goalTimes: { home: [], away: [] }, partial: false },
+      teams: [{ id: 1, name: "Shamrock Rovers", shortName: "SRO" }], players: [], appearances: [],
+    }, NOW);
+    expect(d.teams["1"].colorBg).toBe("#123456");
+    d = setTeamColor(d, 1, null);
+    expect(d.teams["1"].colorBg).toBeUndefined();
+  });
+});
+
+describe("timed availability", () => {
+  it("markOut with until expires automatically; expired flags are history", () => {
+    const until = NOW + 14 * 86400000; // two weeks
+    let d = markOut(importedFixture(), 10, "hamstring", NOW, until);
+    expect(activeFlag(d.players["10"], NOW)).toMatchObject({ note: "hamstring", until });
+    expect(activeFlag(d.players["10"], until + 1)).toBeNull(); // lapsed
+    // lapsed flag doesn't block a new one
+    d = markOut(d, 10, "suspended", until + 2);
+    expect(activeFlag(d.players["10"], until + 2).note).toBe("suspended");
+    expect(d.players["10"].flags).toHaveLength(2);
+  });
+  it("activeFlag without until stays active regardless of time (back-compat)", () => {
+    const d = markOut(importedFixture(), 10, "long-term", NOW);
+    expect(activeFlag(d.players["10"], NOW + 999 * 86400000)).toMatchObject({ note: "long-term" });
+  });
+});
+
+describe("roundSuspects", () => {
+  const DAY = 86400000;
+  const mk = (eventId, round, day, extra = {}) => ({
+    eventId, round, kickoff: NOW + day * DAY, status: "finished",
+    homeTeamId: 1, awayTeamId: 2, homeScore: 0, awayScore: 0, ...extra,
+  });
+  it("flags a match dated with another round's cluster and suggests it", () => {
+    const d = emptyData();
+    [[100, 1, 0], [101, 1, 0], [102, 1, 1], [103, 1, 1]].forEach(([id, r, day]) => { d.matches[id] = mk(id, r, day); });
+    [[200, 3, 14], [201, 3, 14], [202, 3, 15]].forEach(([id, r, day]) => { d.matches[id] = mk(id, r, day); });
+    d.matches[999] = mk(999, 1, 14); // labelled R1, played with the R3 cluster
+    const sus = roundSuspects(d);
+    expect(sus.get(999)).toBe(3);
+    expect(sus.has(100)).toBe(false);
+  });
+  it("ignores postponed shells and respects roundOverride", () => {
+    const d = emptyData();
+    d.matches[1] = mk(1, 1, 0);
+    d.matches[2] = mk(2, 1, 0);
+    d.matches[3] = mk(3, 3, 14);
+    d.matches[4] = mk(4, 3, 14);
+    d.matches[5] = { ...mk(5, 1, 14), roundOverride: 3 }; // user already fixed it
+    d.matches[6] = mk(6, 1, 14, { status: "postponed" });  // shell, ignored
+    const sus = roundSuspects(d);
+    expect(sus.has(5)).toBe(false);
+    expect(sus.has(6)).toBe(false);
   });
 });

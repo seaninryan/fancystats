@@ -12,4 +12,8 @@ describe("teamColor", () => {
     expect(a.bg).toMatch(/^hsl\(/);
     expect(teamColor(null).bg).toMatch(/^hsl\(/);
   });
+  it("user colour override beats the club map, with luminance-based text", () => {
+    expect(teamColor({ name: "Shamrock Rovers", colorBg: "#ffee00" })).toEqual({ bg: "#ffee00", fg: "#17222b" });
+    expect(teamColor({ name: "Shamrock Rovers", colorBg: "#112233" }).fg).toBe("#ffffff");
+  });
 });

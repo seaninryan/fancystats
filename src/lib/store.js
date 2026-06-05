@@ -26,7 +26,7 @@ function defaultPlayer(p) {
 export function applyImport(data, normalized, now) {
   const next = structuredClone(data);
   const { match, teams, players, appearances } = normalized;
-  for (const t of teams) next.teams[t.id] = { name: t.name, shortName: t.shortName };
+  for (const t of teams) next.teams[t.id] = { ...next.teams[t.id], name: t.name, shortName: t.shortName };
   for (const k of Object.keys(next.appearances)) {
     if (k.startsWith(match.eventId + ":")) delete next.appearances[k];
   }
@@ -46,7 +46,7 @@ export function applyImport(data, normalized, now) {
 // stubs: [{eventId, round, kickoff, status, homeTeamId, awayTeamId, homeScore, awayScore}]
 export function upsertMatchStubs(data, stubs, teams) {
   const next = structuredClone(data);
-  for (const t of teams) next.teams[t.id] = { name: t.name, shortName: t.shortName };
+  for (const t of teams) next.teams[t.id] = { ...next.teams[t.id], name: t.name, shortName: t.shortName };
   for (const s of stubs) {
     const prev = next.matches[s.eventId] || {};
     next.matches[s.eventId] = { ...prev, ...s }; // preserves importedAt/goalTimes/partial when present
@@ -85,6 +85,15 @@ export function setAdjustment(data, key, adj) {
   );
   if (hasDeltas) next.adjustments[key] = adj;
   else delete next.adjustments[key];
+  return next;
+}
+
+export function setTeamColor(data, teamId, colorBg) {
+  const next = structuredClone(data);
+  const t = next.teams[teamId];
+  if (!t) return data;
+  if (colorBg) t.colorBg = colorBg;
+  else delete t.colorBg;
   return next;
 }
 
@@ -176,14 +185,16 @@ export function applyPasteResults(data, matched, kind, now) {
 
 // ---- availability flags (user-owned; imports never touch them) ----
 
-export function markOut(data, playerId, note, now) {
+const isFlagActive = (f, now) => !f.clearedAt && (f.until == null || f.until > now);
+
+export function markOut(data, playerId, note, now, until = null) {
   const p0 = data.players[playerId];
   if (!p0) return data;
-  if ((p0.flags || []).some((f) => !f.clearedAt)) return data; // already out — no change
+  if ((p0.flags || []).some((f) => isFlagActive(f, now))) return data; // already out — no change
   const next = structuredClone(data);
   const p = next.players[playerId];
   p.flags = p.flags || [];
-  p.flags.push({ setAt: now, clearedAt: null, note: note || "" });
+  p.flags.push({ setAt: now, clearedAt: null, note: note || "", until });
   return next;
 }
 
@@ -195,7 +206,42 @@ export function clearOut(data, playerId, now) {
   return next;
 }
 
-export const activeFlag = (p) => p?.flags?.find((f) => !f.clearedAt) || null;
+export const activeFlag = (p, now = Date.now()) =>
+  p?.flags?.find((f) => isFlagActive(f, now)) || null;
+
+// Matches whose date sits clearly inside another round's date cluster — the
+// SofaScore reschedule pattern. Returns Map<eventId, suggestedRound>.
+export function roundSuspects(data) {
+  const DAY = 86400000;
+  const groups = new Map();
+  for (const m of Object.values(data.matches)) {
+    if (m.status === "postponed" || m.status === "canceled") continue;
+    if (isSupersededPostponed(data, m)) continue;
+    const r = matchRound(m);
+    if (r == null) continue;
+    if (!groups.has(r)) groups.set(r, []);
+    groups.get(r).push(m);
+  }
+  const medians = new Map();
+  for (const [r, ms] of groups) {
+    const ks = ms.map((m) => m.kickoff).sort((a, b) => a - b);
+    medians.set(r, ks[Math.floor(ks.length / 2)]);
+  }
+  const suspects = new Map();
+  for (const [r, ms] of groups) {
+    for (const m of ms) {
+      let best = r;
+      let bestDist = Math.abs(m.kickoff - medians.get(r));
+      for (const [r2, med] of medians) {
+        if (r2 === r) continue;
+        const d2 = Math.abs(m.kickoff - med);
+        if (d2 < bestDist - 2 * DAY) { best = r2; bestDist = d2; } // clearly closer
+      }
+      if (best !== r) suspects.set(m.eventId, best);
+    }
+  }
+  return suspects;
+}
 
 // ---- directional position mismatch ----
 

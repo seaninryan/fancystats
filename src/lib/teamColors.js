@@ -14,7 +14,14 @@ const CLUB_COLORS = {
   "Waterford": { bg: "#0050a0", fg: "#ffffff" },
 };
 
+function contrastFg(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 150 ? "#17222b" : "#ffffff";
+}
+
 export function teamColor(team) {
+  if (team?.colorBg) return { bg: team.colorBg, fg: contrastFg(team.colorBg) };
   const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, "");
   const key = team?.name && Object.keys(CLUB_COLORS).find((k) => norm(k) === norm(team.name));
   const known = key && CLUB_COLORS[key];
