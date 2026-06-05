@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, markOut, clearOut, activeFlag, mismatchInfo, playerName } from "../lib/store.js";
+import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, activeFlag, mismatchInfo, playerName } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
@@ -29,33 +29,6 @@ function AdjustForm({ adj, onSave, onCancel }) {
   );
 }
 
-function AvailabilityCard({ p, out, history, fmtD, onMark, onClear }) {
-  const [note, setNote] = useState("");
-  return (
-    <div className="card">
-      {out ? (
-        <div className="row">
-          <span>🚫 <b>{out.note || "out"}</b> <span className="dim">since {fmtD(out.setAt)}</span></span>
-          <button onClick={onClear}>Back available</button>
-        </div>
-      ) : (
-        <div className="row">
-          <input placeholder="injured / suspended / World Cup…" value={note}
-            onChange={(e) => setNote(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
-          <button onClick={() => { onMark(note); setNote(""); }}>Mark out</button>
-        </div>
-      )}
-      {history.length > 0 && (
-        <div className="dim" style={{ marginTop: 6 }}>
-          {history.map((f, i) => (
-            <div key={i}>↳ {f.note || "out"} · {fmtD(f.setAt)} → {fmtD(f.clearedAt)}</div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function PlayerDetail({ data, update, playerId, onBack }) {
   const [adjustKey, setAdjustKey] = useState(null);
   const p = data.players[playerId];
@@ -63,10 +36,10 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
   const apps = playerAppearances(data, playerId);
   const derived = deriveRealPosition(apps);
 
-  const out = activeFlag(p);
-  const mi = mismatchInfo(data, playerId);
-  const history = (p.flags || []).filter((f) => f.clearedAt);
   const now = Date.now();
+  const out = activeFlag(p, now);
+  const mi = mismatchInfo(data, playerId);
+  const history = (p.flags || []).filter((f) => f !== out && (f.clearedAt || (f.until && f.until <= now)));
   const upcoming = Object.values(data.matches)
     .filter((m) => (m.homeTeamId === p.teamId || m.awayTeamId === p.teamId)
       && m.kickoff > now && m.status !== "postponed" && m.status !== "canceled")
@@ -124,9 +97,15 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
           )}
         </div>
       </div>
-      <AvailabilityCard p={p} out={out} history={history} fmtD={fmtD}
-        onMark={(note) => { const now = Date.now(); update((d) => markOut(d, playerId, note, now)); }}
-        onClear={() => { const now = Date.now(); update((d) => clearOut(d, playerId, now)); }} />
+      {(out || history.length > 0) && (
+        <div className="card">
+          {out && <div>🚫 <b>{out.note || "out"}</b> <span className="dim">
+            since {fmtD(out.setAt)}{out.until ? ` · until ${fmtD(out.until)}` : ""} — manage on the Teams page</span></div>}
+          {history.map((f, i) => (
+            <div key={i} className="dim">↳ {f.note || "out"} · {fmtD(f.setAt)} → {fmtD(f.clearedAt ?? f.until)}</div>
+          ))}
+        </div>
+      )}
       {upcoming.length > 0 && (
         <div className="card dim">
           Upcoming: {upcoming.map((m) => {

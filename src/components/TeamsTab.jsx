@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { matchRound, setPlayerField, activeFlag, playerName, missingFantasyData } from "../lib/store.js";
+import { matchRound, setPlayerField, activeFlag, playerName, missingFantasyData, markOut, clearOut, setTeamColor } from "../lib/store.js";
 import { scoreAppearance } from "../lib/scoring.js";
+import { teamColor } from "../lib/teamColors.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
 
 // Colour = how they appeared; emoji = what they did.
@@ -43,12 +44,36 @@ const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short"
 
 const TOTAL_COLS = [["minutes", "Min"], ["goals", "G"], ["assists", "A"], ["points", "Pts"]];
 
+function OutEditor({ out, onClose, onMark, onClear }) {
+  const [note, setNote] = useState(out?.note || "");
+  const [weeks, setWeeks] = useState("");
+  return (
+    <div className="row" style={{ marginTop: 4 }}>
+      {out ? (
+        <>
+          <span className="dim">{out.note || "out"}{out.until ? ` (until ${new Date(out.until).toLocaleDateString("en-IE")})` : ""}</span>
+          <button onClick={onClear}>Back available</button>
+        </>
+      ) : (
+        <>
+          <input placeholder="injured / suspended / away…" value={note} onChange={(e) => setNote(e.target.value)} style={{ width: 150 }} />
+          <input type="number" min="1" max="40" placeholder="wks" title="weeks out (blank = indefinite)"
+            value={weeks} onChange={(e) => setWeeks(e.target.value)} style={{ width: 55 }} />
+          <button className="primary" onClick={() => onMark(note, Number(weeks) || 0)}>Save</button>
+        </>
+      )}
+      <button onClick={onClose}>✕</button>
+    </div>
+  );
+}
+
 export default function TeamsTab({ data, update, openPlayer }) {
   const teamIds = Object.keys(data.teams)
     .sort((a, b) => data.teams[a].name.localeCompare(data.teams[b].name));
   const [teamId, setTeamId] = useState(teamIds[0] || null);
   const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "apps", dir: -1 });
+  const [outEdit, setOutEdit] = useState(null); // pid being edited
   const selected = teamId && data.teams[teamId] ? teamId : teamIds[0] || null;
 
   const gone = (m) => m.status === "postponed" || m.status === "canceled";
@@ -63,8 +88,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
   const upcoming = Object.values(data.matches)
     .filter((m) => (String(m.homeTeamId) === selected || String(m.awayTeamId) === selected)
       && m.kickoff > now && !gone(m))
-    .sort((a, b) => a.kickoff - b.kickoff)
-    .slice(0, 3);
+    .sort((a, b) => a.kickoff - b.kickoff);
   const nextMatch = upcoming[0];
 
   const apps = Object.values(data.appearances).filter((a) => String(a.teamId) === selected);
@@ -115,6 +139,12 @@ export default function TeamsTab({ data, update, openPlayer }) {
         <select value={selected || ""} onChange={(e) => setTeamId(e.target.value)}>
           {teamIds.map((id) => <option key={id} value={id}>{data.teams[id].name}</option>)}
         </select>
+        <input type="color" title="team colour (saves when you close the picker)"
+          defaultValue={teamColor(data.teams[selected]).bg.startsWith("#") ? teamColor(data.teams[selected]).bg : "#888888"}
+          key={selected}
+          onBlur={(e) => update((d) => setTeamColor(d, selected, e.target.value))} />
+        <button className="mini-toggle" title="reset to default colour"
+          onClick={() => update((d) => setTeamColor(d, selected, null))}>↺</button>
         {["all", 3, 5].map((w) => (
           <button key={w} className={win === w ? "primary" : ""} onClick={() => setWin(w)}>
             {w === "all" ? "All" : `Last ${w}`}
@@ -166,7 +196,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
               {playerIds.map((pid) => {
                 const p = data.players[pid];
                 const t = totals.get(pid);
-                const out = activeFlag(p);
+                const out = activeFlag(p, now);
                 const err = missingFantasyData(p, apps.filter((x) => x.playerId === pid));
                 return (
                   <tr key={pid}>
@@ -175,12 +205,28 @@ export default function TeamsTab({ data, update, openPlayer }) {
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
                       <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}
-                      <a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                      <button className={`mini-toggle ${out ? "" : "off"}`} aria-pressed={!!out}
+                        title={out ? `out: ${out.note}` : "mark out"}
+                        onClick={() => setOutEdit(outEdit === pid ? null : pid)}>🚫</button>
+                      {" "}<a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
                         onClick={() => openPlayer(String(pid))}
                         onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
                         {playerName(p) || pid}
                       </a>
+                      {outEdit === pid && (
+                        <OutEditor out={out} onClose={() => setOutEdit(null)}
+                          onMark={(note, weeks) => {
+                            const now = Date.now();
+                            const until = weeks ? now + weeks * 7 * 86400000 : null;
+                            update((d) => markOut(d, pid, note, now, until));
+                            setOutEdit(null);
+                          }}
+                          onClear={() => {
+                            const now = Date.now();
+                            update((d) => clearOut(d, pid, now));
+                            setOutEdit(null);
+                          }} />
+                      )}
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
@@ -200,7 +246,12 @@ export default function TeamsTab({ data, update, openPlayer }) {
                         </td>
                       );
                     })}
-                    {upcoming.map((m) => <td key={m.eventId} className="upcoming-col">·</td>)}
+                    {upcoming.map((m) => (
+                      <td key={m.eventId} className="upcoming-col"
+                        title={out && (out.until == null || m.kickoff < out.until) ? out.note || "out" : ""}>
+                        {out && (out.until == null || m.kickoff < out.until) ? "🚫" : "·"}
+                      </td>
+                    ))}
                   </tr>
                 );
               })}
