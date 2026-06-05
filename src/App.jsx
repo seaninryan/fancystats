@@ -5,6 +5,7 @@ import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
 import TeamsTab from "./components/TeamsTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
+import PlayerDetail from "./components/PlayerDetail.jsx";
 
 const TABS = [
   ["matches", "Matches", MatchesTab],
@@ -21,6 +22,7 @@ export default function App() {
   const [tab, setTab] = useState("matches");
   const [saveState, setSaveState] = useState("idle"); // idle | saving | error
   const [authExpired, setAuthExpired] = useState(false);
+  const [openPlayerId, setOpenPlayerId] = useState(null);
   const dirtyRef = useRef(false);
 
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function App() {
     <div>
       <nav className="tabs">
         {TABS.map(([key, label]) => (
-          <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>
+          <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setOpenPlayerId(null); }}>{label}</button>
         ))}
         <span className="dim" role="status" aria-live="polite" style={{ marginLeft: "auto", alignSelf: "center" }}>
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : `v${VERSION}`}
@@ -108,7 +110,9 @@ export default function App() {
         </div>
       )}
       <main className="page">
-        <Active data={data} update={update} />
+        {openPlayerId && data.players[openPlayerId]
+          ? <PlayerDetail data={data} update={update} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
+          : <Active data={data} update={update} openPlayer={setOpenPlayerId} />}
       </main>
     </div>
   );

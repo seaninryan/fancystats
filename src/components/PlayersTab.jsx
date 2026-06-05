@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { playerTotals, appearancesByPlayer, mismatchInfo, activeFlag, playerName, missingFantasyData } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
-import PlayerDetail from "./PlayerDetail.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 const COLS = [
@@ -21,10 +20,9 @@ function MismatchMark({ mi }) {
   );
 }
 
-export default function PlayersTab({ data, update }) {
+export default function PlayersTab({ data, update, openPlayer }) {
   const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, q: "" });
   const [sort, setSort] = useState({ key: "points", dir: -1 });
-  const [openId, setOpenId] = useState(null);
 
   const rows = useMemo(() => {
     const index = appearancesByPlayer(data); // one pass instead of N full scans
@@ -60,10 +58,6 @@ export default function PlayersTab({ data, update }) {
       return (typeof av === "string" ? av.localeCompare(bv) : av - bv) * sort.dir;
     });
 
-  if (openId) {
-    return <PlayerDetail data={data} update={update} playerId={openId} onBack={() => setOpenId(null)} />;
-  }
-
   return (
     <div>
       <div className="row" style={{ margin: "8px 0" }}>
@@ -94,7 +88,7 @@ export default function PlayersTab({ data, update }) {
           </tr></thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.id} onClick={() => setOpenId(r.id)} style={{ cursor: "pointer" }}>
+              <tr key={r.id} onClick={() => openPlayer(r.id)} style={{ cursor: "pointer" }}>
                 <td>{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>

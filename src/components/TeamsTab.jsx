@@ -43,7 +43,7 @@ const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short"
 
 const TOTAL_COLS = [["minutes", "Min"], ["goals", "G"], ["assists", "A"], ["points", "Pts"]];
 
-export default function TeamsTab({ data, update }) {
+export default function TeamsTab({ data, update, openPlayer }) {
   const teamIds = Object.keys(data.teams)
     .sort((a, b) => data.teams[a].name.localeCompare(data.teams[b].name));
   const [teamId, setTeamId] = useState(teamIds[0] || null);
@@ -175,7 +175,12 @@ export default function TeamsTab({ data, update }) {
                         onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
                       <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                         onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{playerName(p) || pid}
+                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}
+                      <a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                        onClick={() => openPlayer(String(pid))}
+                        onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
+                        {playerName(p) || pid}
+                      </a>
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
