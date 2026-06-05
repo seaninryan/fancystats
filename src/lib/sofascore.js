@@ -92,3 +92,82 @@ export function normalize(eventPayload, lineupsPayload, incidentsPayload) {
   }
   return { match, teams, players, appearances };
 }
+
+export const API = "https://api.sofascore.com/api/v1";
+
+export async function fetchJson(path, fetcher = (...a) => fetch(...a)) {
+  const res = await fetcher(API + path);
+  if (!res.ok) {
+    const err = new Error(`SofaScore ${res.status} for ${path}`);
+    err.status = res.status;
+    throw err;
+  }
+  return res.json();
+}
+
+function eventToStub(e) {
+  return {
+    eventId: e.id,
+    round: e.roundInfo?.round ?? null,
+    kickoff: (e.startTimestamp || 0) * 1000,
+    status: e.status?.type || "unknown",
+    homeTeamId: e.homeTeam.id,
+    awayTeamId: e.awayTeam.id,
+    homeScore: e.homeScore?.current ?? null,
+    awayScore: e.awayScore?.current ?? null,
+  };
+}
+
+const MAX_PAGES = 20; // safety: a season is ~180 matches, ~30/page
+
+async function walkEvents(meta, direction, fetcher) {
+  const out = [];
+  for (let page = 0; page < MAX_PAGES; page++) {
+    let body;
+    try {
+      body = await fetchJson(
+        `/unique-tournament/${meta.tournamentId}/season/${meta.seasonId}/events/${direction}/${page}`,
+        fetcher,
+      );
+    } catch (e) {
+      if (e.status === 404 && page === 0) return out; // empty feed (e.g. season over)
+      if (e.status === 404) return out; // walked past the last page
+      throw e;
+    }
+    out.push(...(body.events || []));
+    if (!body.hasNextPage) break;
+  }
+  return out;
+}
+
+// Returns { stubs, teams } for store.upsertMatchStubs.
+export async function fetchSeasonEvents(meta, fetcher = (...a) => fetch(...a)) {
+  const events = [
+    ...(await walkEvents(meta, "last", fetcher)),
+    ...(await walkEvents(meta, "next", fetcher)),
+  ];
+  const teams = new Map();
+  for (const e of events) {
+    for (const t of [e.homeTeam, e.awayTeam]) {
+      teams.set(t.id, { id: t.id, name: t.name, shortName: t.nameCode || t.shortName || t.name });
+    }
+  }
+  return { stubs: events.map(eventToStub), teams: [...teams.values()] };
+}
+
+// Fetch one match's payloads and normalize. Lineups/incidents failures degrade
+// gracefully (partial import); an event fetch failure throws.
+export async function importMatch(eventId, fetcher = (...a) => fetch(...a)) {
+  const eventPayload = await fetchJson(`/event/${eventId}`, fetcher);
+  let lineupsPayload = null;
+  try {
+    lineupsPayload = await fetchJson(`/event/${eventId}/lineups`, fetcher);
+  } catch { /* known SofaScore gap -> partial import */ }
+  let incidentsPayload = { incidents: [] };
+  try {
+    incidentsPayload = await fetchJson(`/event/${eventId}/incidents`, fetcher);
+  } catch { /* score-only import still useful */ }
+  return normalize(eventPayload, lineupsPayload, incidentsPayload);
+}
+
+export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
