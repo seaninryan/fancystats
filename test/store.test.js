@@ -7,6 +7,7 @@ import {
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
+  setAbsence, getAbsence, playerOutNow,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -467,5 +468,38 @@ describe("allMatchTeamPoints", () => {
   it("skips positionless players and unimported matches", () => {
     const d = importedFixture(); // nobody has a position
     expect(allMatchTeamPoints(d).get(100)).toEqual({ home: 0, away: 0 });
+  });
+});
+
+describe("absences", () => {
+  it("set, read, overwrite and clear a per-match absence", () => {
+    let d = setAbsence(importedFixture(), 100, 10, "ankle knock", NOW);
+    expect(getAbsence(d, 100, 10)).toMatchObject({ note: "ankle knock", setAt: NOW });
+    d = setAbsence(d, 100, 10, "ankle (4-6 wks)", NOW + 1);
+    expect(getAbsence(d, 100, 10).note).toBe("ankle (4-6 wks)");
+    d = setAbsence(d, 100, 10, null, NOW + 2);
+    expect(getAbsence(d, 100, 10)).toBeNull();
+  });
+  it("absences survive re-import", () => {
+    let d = setAbsence(importedFixture(), 100, 10, "suspended", NOW);
+    d = applyImport(d, {
+      match: { eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0, goalTimes: { home: [40], away: [] }, partial: false },
+      teams: [], players: [], appearances: [],
+    }, NOW + 5);
+    expect(getAbsence(d, 100, 10).note).toBe("suspended");
+  });
+  it("playerOutNow reports the next upcoming absence, ignoring past ones", () => {
+    let d = importedFixture();
+    d.matches[700] = { eventId: 700, round: 9, kickoff: NOW + 7 * 86400000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null };
+    d.matches[701] = { eventId: 701, round: 10, kickoff: NOW + 14 * 86400000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null };
+    expect(playerOutNow(d, 10, NOW)).toBeNull();
+    d = setAbsence(d, 100, 10, "was injured", NOW);      // past match — history only
+    expect(playerOutNow(d, 10, NOW)).toBeNull();
+    d = setAbsence(d, 701, 10, "World Cup", NOW);
+    d = setAbsence(d, 700, 10, "World Cup", NOW);
+    expect(playerOutNow(d, 10, NOW)).toMatchObject({ note: "World Cup", eventId: 700 }); // soonest upcoming
+  });
+  it("emptyData includes the absences map", () => {
+    expect(emptyData().absences).toEqual({});
   });
 });

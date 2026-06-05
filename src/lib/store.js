@@ -8,7 +8,7 @@ export function emptyData() {
   return {
     version: 1,
     meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null },
-    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {},
+    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {},
   };
 }
 
@@ -208,6 +208,38 @@ export function clearOut(data, playerId, now) {
 
 export const activeFlag = (p, now = Date.now()) =>
   p?.flags?.find((f) => isFlagActive(f, now)) || null;
+
+// ---- per-match absences (user-owned; imports never touch them) ----
+// Marked directly on grid cells: why a player misses/missed a given match.
+
+export function setAbsence(data, eventId, playerId, note, now) {
+  const next = structuredClone(data);
+  next.absences = next.absences || {}; // pre-absences stored data
+  const key = `${eventId}:${playerId}`;
+  if (note) next.absences[key] = { note, setAt: now };
+  else delete next.absences[key];
+  return next;
+}
+
+export function getAbsence(data, eventId, playerId) {
+  return data.absences?.[`${eventId}:${playerId}`] || null;
+}
+
+// "Out now" = has an absence on an upcoming (unplayed) match; returns the
+// soonest one so lists can show the current reason.
+export function playerOutNow(data, playerId, now = Date.now()) {
+  let best = null;
+  for (const [key, a] of Object.entries(data.absences || {})) {
+    const [eventId, pid] = key.split(":");
+    if (pid !== String(playerId)) continue;
+    const m = data.matches[eventId];
+    if (!m || m.kickoff <= now || m.status === "finished") continue;
+    if (!best || m.kickoff < data.matches[best.eventId].kickoff) {
+      best = { ...a, eventId: Number(eventId) };
+    }
+  }
+  return best;
+}
 
 // Matches whose date sits clearly inside another round's date cluster — the
 // SofaScore reschedule pattern. Returns Map<eventId, suggestedRound>.
