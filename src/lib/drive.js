@@ -14,6 +14,9 @@ let fileId = null;
 let onAuthExpired = null;
 let keepAliveStarted = false;
 let pendingTokenRequest = null;
+let saveQueue = Promise.resolve(true);
+let queuedData = null;
+let queuedRun = false;
 
 function rememberToken(resp) {
   accessToken = resp.access_token;
@@ -141,6 +144,20 @@ export async function saveWithRetry(data) {
     }
     return false; // non-auth failures surface via the caller's save-state, not the reconnect banner
   }
+}
+
+// Serialized latest-wins save: rapid successive calls collapse to the newest
+// snapshot, and PATCHes can never complete out of order (each waits for the
+// previous), so a slow early save cannot overwrite a later one.
+export function saveLatest(data) {
+  queuedData = data;
+  if (queuedRun) return saveQueue;
+  queuedRun = true;
+  saveQueue = saveQueue.then(() => {
+    queuedRun = false;
+    return saveWithRetry(queuedData);
+  });
+  return saveQueue;
 }
 
 // Background keep-alive: silent reauth when <12 min left. Call once after sign-in.

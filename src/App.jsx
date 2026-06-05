@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { initAuth, isSignedIn, signIn, saveWithRetry, driveLoad, startTokenKeepAlive } from "./lib/drive.js";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { initAuth, isSignedIn, signIn, saveLatest, driveLoad, startTokenKeepAlive } from "./lib/drive.js";
 import { emptyData } from "./lib/store.js";
 import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
@@ -19,6 +19,7 @@ export default function App() {
   const [tab, setTab] = useState("matches");
   const [saveState, setSaveState] = useState("idle"); // idle | saving | error
   const [authExpired, setAuthExpired] = useState(false);
+  const dirtyRef = useRef(false);
 
   useEffect(() => {
     initAuth({ onAuthExpired: () => setAuthExpired(true) }).then((ok) => {
@@ -35,18 +36,34 @@ export default function App() {
       .catch(() => { setData(emptyData()); setPhase("ready"); });
   }, [phase]);
 
-  // Single mutation entry point: components pass an updater (data) => newData.
+  // Single mutation entry point. The updater stays pure; persisting happens in
+  // the effect below so StrictMode/concurrent re-runs can never double-save.
   const update = useCallback((updater) => {
-    setData((prev) => {
-      const next = updater(prev);
-      setSaveState("saving");
-      saveWithRetry(next).then((ok) => setSaveState(ok ? "idle" : "error"));
-      return next;
-    });
+    dirtyRef.current = true;
+    setData(updater);
   }, []);
 
+  useEffect(() => {
+    if (!dirtyRef.current || !data) return;
+    dirtyRef.current = false;
+    setSaveState("saving");
+    saveLatest(data).then((ok) => {
+      setSaveState(ok ? "idle" : "error");
+      if (ok) setAuthExpired(false);
+    });
+  }, [data]);
+
   const handleSignIn = async () => {
-    if (await signIn()) { setAuthExpired(false); setPhase("loading"); }
+    if (!(await signIn())) return;
+    setAuthExpired(false);
+    if (data) {
+      // Re-established session: flush the in-memory edits. Never reload over
+      // them — edits made while the session was expired would be lost.
+      setSaveState("saving");
+      saveLatest(data).then((ok) => setSaveState(ok ? "idle" : "error"));
+    } else {
+      setPhase("loading");
+    }
   };
 
   if (phase === "booting") return <p className="page dim">Loading…</p>;
@@ -63,19 +80,19 @@ export default function App() {
     );
   }
 
-  const Active = TABS.find(([k]) => k === tab)[2];
+  const Active = (TABS.find(([k]) => k === tab) ?? TABS[0])[2];
   return (
     <div>
       <nav className="tabs">
         {TABS.map(([key, label]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => setTab(key)}>{label}</button>
         ))}
-        <span className="dim" style={{ marginLeft: "auto", alignSelf: "center" }}>
+        <span className="dim" role="status" aria-live="polite" style={{ marginLeft: "auto", alignSelf: "center" }}>
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : ""}
         </span>
       </nav>
       {authExpired && (
-        <div className="banner err row">
+        <div className="banner err row" role="alert">
           Session expired — <button onClick={handleSignIn}>Reconnect</button>
         </div>
       )}
