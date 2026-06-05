@@ -117,3 +117,21 @@ export function playerTotals(data, playerId) {
   }
   return t;
 }
+
+// kind: "price" | "GK" | "DEF" | "MID" | "FWD"
+export function applyPasteResults(data, matched, kind, now) {
+  const next = structuredClone(data);
+  for (const m of matched) {
+    const p = next.players[m.playerId];
+    if (!p) continue;
+    if (kind === "price") {
+      p.price = m.value;
+      p.priceUpdatedAt = now;
+    } else if (p.gamePositionSource !== "manual") {
+      p.gamePosition = kind;
+      p.gamePositionSource = "paste";
+    }
+    if (m.alias) p.pasteAlias = m.alias;
+  }
+  return next;
+}

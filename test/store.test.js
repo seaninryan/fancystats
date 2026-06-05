@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   emptyData, applyImport, upsertMatchStubs, setPlayerField,
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
+  applyPasteResults,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -151,5 +152,26 @@ describe("review fixes", () => {
     let d = importedFixture();
     d = setPlayerField(d, "10", "gamePosition", "FWD");
     expect(playerTotals(d, "10").points).toBe(9);
+  });
+});
+
+describe("applyPasteResults", () => {
+  it("price paste sets price + timestamp", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: "10", name: "A Keena", value: 9.5 }], "price", NOW);
+    expect(d.players["10"].price).toBe(9.5);
+    expect(d.players["10"].priceUpdatedAt).toBe(NOW);
+  });
+  it("position paste sets gamePosition with source=paste", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: "10", name: "A Keena", value: 9.5 }], "FWD", NOW);
+    expect(d.players["10"]).toMatchObject({ gamePosition: "FWD", gamePositionSource: "paste" });
+  });
+  it("position paste never clobbers a manual gamePosition", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "MID");
+    d = applyPasteResults(d, [{ playerId: "10", name: "A Keena", value: 9.5 }], "FWD", NOW);
+    expect(d.players["10"].gamePosition).toBe("MID");
+  });
+  it("remembers manual-link aliases", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: "10", name: "A. Keena (FLOI)", value: 9.5, alias: "A. Keena (FLOI)" }], "price", NOW);
+    expect(d.players["10"].pasteAlias).toBe("A. Keena (FLOI)");
   });
 });
