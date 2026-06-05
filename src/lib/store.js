@@ -319,11 +319,11 @@ export function staleInfo(data, now) {
 }
 
 // Display name: the user's override wins (SofaScore short names like "Pico"
-// don't always match fantasyloi's, and re-imports must not clobber the fix).
+// don't always match the fantasy site's, and re-imports must not clobber the fix).
 export const playerName = (p) => p?.customName || p?.name || "?";
 
 // A player who appears in matches but has no game position earns no points in
-// our model — almost always an unlinked fantasyloi identity. Surface it loudly.
+// our model — almost always an unlinked fantasy-site identity. Surface it loudly.
 export function missingFantasyData(player, apps) {
   return apps.length > 0 && !player?.gamePosition;
 }

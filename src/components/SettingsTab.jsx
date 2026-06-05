@@ -35,9 +35,9 @@ export default function SettingsTab({ data, update }) {
   return (
     <div>
       <div className="card">
-        <h3>Import from Fantasy LOI</h3>
+        <h3>Import from the fantasy game</h3>
         <p className="dim">
-          Open fantasyloi.leagueofireland.ie → Stats → Player Stats, set the dropdowns to match
+          Open the fantasy game's Stats → Player Stats page, set the dropdowns to match
           your selection below, select the whole results table, copy, and paste here.
         </p>
         <div className="row">

@@ -240,7 +240,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
-                    <td className={err ? "err-cell" : ""} title={err ? "No fantasy data — set a position or add their fantasyloi alias in the player view" : ""}>{err ? "❗" : t.points ?? "—"}</td>
+                    <td className={err ? "err-cell" : ""} title={err ? "No fantasy data — set a position or add their fantasy alias in the player view" : ""}>{err ? "❗" : t.points ?? "—"}</td>
                     {matches.map((m) => {
                       const key = `${m.eventId}:${pid}`;
                       const a = byPlayerMatch.get(key);

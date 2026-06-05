@@ -1,6 +1,6 @@
 # fancystats
 
-Personal League of Ireland fantasy football stats. Static React app on GitHub
+Personal fantasy football stats. Static React app on GitHub
 Pages; match data imported from SofaScore in the browser; everything stored in
 my own Google Drive (appDataFolder). No server.
 

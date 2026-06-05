@@ -76,7 +76,7 @@ export default function App() {
     return (
       <div className="page" style={{ textAlign: "center", paddingTop: "30vh" }}>
         <h1>fancystats</h1>
-        <p className="dim">League of Ireland fantasy stats</p>
+        <p className="dim">fantasy football stats</p>
         {phase === "signedout"
           ? <button className="primary" onClick={handleSignIn}>Sign in with Google</button>
           : <p className="dim">Loading your data…</p>}

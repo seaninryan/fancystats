@@ -104,7 +104,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
-                <td className={r.err ? "err-cell" : ""} title={r.err ? "No fantasy data — set a position or add their fantasyloi alias in the player view" : ""}>{r.err ? "❗" : r.points ?? "—"}</td>
+                <td className={r.err ? "err-cell" : ""} title={r.err ? "No fantasy data — set a position or add their fantasy alias in the player view" : ""}>{r.err ? "❗" : r.points ?? "—"}</td>
                 <td>{r.goals}</td><td>{r.assists}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
             ))}

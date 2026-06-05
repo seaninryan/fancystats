@@ -6,6 +6,14 @@ import { TeamPill, PtsPill } from "./Pills.jsx";
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
 
+// long name on desktop, short code on phones (CSS picks one)
+const teamLabel = (t) => (
+  <>
+    <span className="gt-sm">{t?.name ?? "?"}</span>
+    <span className="lt-sm">{t?.shortName ?? "?"}</span>
+  </>
+);
+
 export default function MatchesTab({ data, update }) {
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState(null);
@@ -100,11 +108,11 @@ export default function MatchesTab({ data, update }) {
           {items.map((m) => (
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
-                <TeamPill team={data.teams[m.homeTeamId]} label={data.teams[m.homeTeamId]?.name} />
+                <TeamPill team={data.teams[m.homeTeamId]} label={teamLabel(data.teams[m.homeTeamId])} />
                 {teamPts.has(m.eventId) && <> <PtsPill pts={teamPts.get(m.eventId).home} /></>}
                 {" "}{m.homeScore ?? ""}–{m.awayScore ?? ""}{" "}
                 {teamPts.has(m.eventId) && <><PtsPill pts={teamPts.get(m.eventId).away} /> </>}
-                <TeamPill team={data.teams[m.awayTeamId]} label={data.teams[m.awayTeamId]?.name} />
+                <TeamPill team={data.teams[m.awayTeamId]} label={teamLabel(data.teams[m.awayTeamId])} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
                 {suspects.has(m.eventId) && (
                   <span className="loss" title={`date suggests Round ${suspects.get(m.eventId)} — use the selector to move it`}> ⚠R{suspects.get(m.eventId)}?</span>

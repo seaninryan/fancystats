@@ -61,3 +61,10 @@ th .sub { display: block; font-size: 11px; font-weight: 400; }
 .cell-wrap { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 70px; }
 .cell-click { cursor: pointer; }
 .absence-bar { position: sticky; left: 0; }
+
+/* responsive label swap: long names on desktop, short codes on phones */
+.lt-sm { display: none; }
+@media (max-width: 640px) {
+  .gt-sm { display: none; }
+  .lt-sm { display: inline; }
+}

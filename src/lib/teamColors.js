@@ -1,4 +1,4 @@
-// Real club colours for the LOI Premier Division (keyed by SofaScore team name).
+// Real club colours (keyed by SofaScore team name).
 // Unknown clubs (promotion, name drift) get a stable fallback hue.
 const CLUB_COLORS = {
   "Shamrock Rovers": { bg: "#0e7a3c", fg: "#ffffff" },

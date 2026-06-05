@@ -1,5 +1,5 @@
 // src/lib/pasteImport.js
-// Parse text copied from the fantasyloi Player Stats table and match names
+// Parse text copied from the fantasy site's Player Stats table and match names
 // to SofaScore player records.
 
 // Mc/Mac spelling variants are intentionally NOT conflated — false matches are worse; the manual-link UI handles them.

@@ -74,8 +74,8 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
               setField("customName", v && v !== p.name ? v : null);
             }} />
         </label>
-        <label>fantasyloi alias{" "}
-          <input defaultValue={p.pasteAlias || ""} placeholder="name used on fantasyloi" style={{ width: 170 }}
+        <label>fantasy alias{" "}
+          <input defaultValue={p.pasteAlias || ""} placeholder="name used on the fantasy site" style={{ width: 170 }}
             onBlur={(e) => setField("pasteAlias", e.target.value.trim() || null)} />
         </label>
       </div>

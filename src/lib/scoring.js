@@ -1,5 +1,5 @@
 // src/lib/scoring.js
-// Fantasy LOI scoring rules — values from fantasyloi.leagueofireland.ie/Rules/Rules
+// Scoring rules — values from the fantasy game's published rules page
 // (re-verified during Task 13 against a real gameweek).
 export const RULES = {
   appearance: { sub: 1, startedSubbedOff: 2, fullMatch: 3 },
