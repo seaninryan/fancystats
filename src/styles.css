@@ -34,3 +34,6 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .sticky-col th:first-child, .sticky-col td:first-child {
   position: sticky; left: 0; background: var(--bg); z-index: 2;
 }
+.chip { padding: 1px 7px; border-radius: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.gain { color: var(--accent); font-weight: 700; }
+.loss { color: var(--err); font-weight: 700; }

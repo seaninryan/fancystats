@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { matchRound, setPlayerField, setAdjustment, playerAppearances, deriveRealPosition } from "../lib/store.js";
+import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, markOut, clearOut, activeFlag, mismatchInfo } from "../lib/store.js";
+import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
@@ -27,6 +28,33 @@ function AdjustForm({ adj, onSave, onCancel }) {
   );
 }
 
+function AvailabilityCard({ p, out, history, fmtD, onMark, onClear }) {
+  const [note, setNote] = useState("");
+  return (
+    <div className="card">
+      {out ? (
+        <div className="row">
+          <span>🚫 <b>{out.note || "out"}</b> <span className="dim">since {fmtD(out.setAt)}</span></span>
+          <button onClick={onClear}>Back available</button>
+        </div>
+      ) : (
+        <div className="row">
+          <input placeholder="injured / suspended / World Cup…" value={note}
+            onChange={(e) => setNote(e.target.value)} style={{ flex: 1, minWidth: 140 }} />
+          <button onClick={() => { onMark(note); setNote(""); }}>Mark out</button>
+        </div>
+      )}
+      {history.length > 0 && (
+        <div className="dim" style={{ marginTop: 6 }}>
+          {history.map((f, i) => (
+            <div key={i}>↳ {f.note || "out"} · {fmtD(f.setAt)} → {fmtD(f.clearedAt)}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PlayerDetail({ data, update, playerId, onBack }) {
   const [adjustKey, setAdjustKey] = useState(null);
   const p = data.players[playerId];
@@ -35,11 +63,29 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
   const derived = deriveRealPosition(apps);
   const team = (id) => data.teams[id]?.shortName || id;
 
+  const out = activeFlag(p);
+  const mi = mismatchInfo(data, playerId);
+  const history = (p.flags || []).filter((f) => f.clearedAt);
+  const now = Date.now();
+  const upcoming = Object.values(data.matches)
+    .filter((m) => (m.homeTeamId === p.teamId || m.awayTeamId === p.teamId)
+      && m.kickoff > now && m.status !== "postponed" && m.status !== "canceled")
+    .sort((a, b) => a.kickoff - b.kickoff)
+    .slice(0, 2);
+  const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
+
   const setField = (field, value) => update((d) => setPlayerField(d, playerId, field, value));
 
   return (
     <div>
-      <div className="row"><button onClick={onBack}>←</button><h3 style={{ margin: 0 }}>{p.name} · {data.teams[p.teamId]?.name}</h3></div>
+      <div className="row"><button onClick={onBack}>←</button>
+        <h3 style={{ margin: 0 }}>
+          {p.name}{" "}
+          <span className="chip" style={{ background: teamColor(data.teams[p.teamId]).bg, color: teamColor(data.teams[p.teamId]).fg }}>
+            {data.teams[p.teamId]?.name}
+          </span>
+        </h3>
+      </div>
       <div className="card row">
         <button className={p.starred ? "primary" : ""} onClick={() => setField("starred", !p.starred)}>⭐ watch</button>
         <button className={p.inSquad ? "primary" : ""} onClick={() => setField("inSquad", !p.inSquad)}>🔵 in squad</button>
@@ -58,10 +104,27 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
               {POSITIONS.map((x) => <option key={x}>{x}</option>)}
             </select>
           </label>
+          {mi && (
+            <span className={mi.delta >= 0 ? "gain" : "loss"}>
+              {mi.delta >= 0 ? "▲" : "▼"} game position pays {mi.delta >= 0 ? "+" : ""}{mi.delta} pts vs {mi.realPosition}
+            </span>
+          )}
         </div>
       </div>
+      <AvailabilityCard p={p} out={out} history={history} fmtD={fmtD}
+        onMark={(note) => { const now = Date.now(); update((d) => markOut(d, playerId, note, now)); }}
+        onClear={() => { const now = Date.now(); update((d) => clearOut(d, playerId, now)); }} />
+      {upcoming.length > 0 && (
+        <div className="card dim">
+          Upcoming: {upcoming.map((m) => {
+            const home = m.homeTeamId === p.teamId;
+            const opp = data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName;
+            return `${home ? "v" : "@"} ${opp} ${fmtD(m.kickoff)}`;
+          }).join(" · ")}
+        </div>
+      )}
       <div className="scroll-x">
-        <table>
+        <table className="sticky-col">
           <thead><tr><th>Match</th><th>Min</th><th>G</th><th>A</th><th>Pos</th><th>Pts</th><th></th></tr></thead>
           <tbody>
             {[...apps].reverse().map((a) => {
