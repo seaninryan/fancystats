@@ -17,7 +17,7 @@ function defaultPlayer(p) {
     name: p.name, teamId: p.teamId,
     gamePosition: null, gamePositionSource: null, realPosition: null,
     price: null, priceUpdatedAt: null,
-    starred: false, inSquad: false, pasteAlias: null,
+    starred: false, inSquad: false, pasteAlias: null, flags: [],
   };
 }
 
@@ -116,10 +116,14 @@ export function positionMismatch(player, apps) {
   return derived.position !== player.gamePosition;
 }
 
-export function playerTotals(data, playerId) {
+// opts.position: score as if the player had this position (mismatch what-ifs).
+// opts.eventIds: Set — only count appearances from these matches (windowed totals).
+export function playerTotals(data, playerId, opts = {}) {
   const player = data.players[playerId];
-  const apps = playerAppearances(data, playerId);
-  const t = { minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: player?.gamePosition ? 0 : null };
+  const position = opts.position ?? player?.gamePosition;
+  let apps = playerAppearances(data, playerId);
+  if (opts.eventIds) apps = apps.filter((a) => opts.eventIds.has(a.eventId));
+  const t = { minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: position ? 0 : null };
   for (const a of apps) {
     const key = `${a.eventId}:${a.playerId}`;
     const adj = data.adjustments[key] || null;
@@ -129,7 +133,7 @@ export function playerTotals(data, playerId) {
     a.started ? t.starts++ : t.subApps++;
     if (t.points !== null) {
       const match = data.matches[a.eventId];
-      if (match?.goalTimes) t.points += scoreAppearance(a, match, player.gamePosition, adj).total;
+      if (match?.goalTimes) t.points += scoreAppearance(a, match, position, adj).total;
     }
   }
   return t;
@@ -151,4 +155,65 @@ export function applyPasteResults(data, matched, kind, now) {
     if (m.alias) p.pasteAlias = m.alias;
   }
   return next;
+}
+
+// ---- availability flags (user-owned; imports never touch them) ----
+
+export function markOut(data, playerId, note, now) {
+  const next = structuredClone(data);
+  const p = next.players[playerId];
+  if (!p) return data;
+  p.flags = p.flags || [];
+  if (!p.flags.some((f) => !f.clearedAt)) p.flags.push({ setAt: now, clearedAt: null, note: note || "" });
+  return next;
+}
+
+export function clearOut(data, playerId, now) {
+  const next = structuredClone(data);
+  const f = next.players[playerId]?.flags?.find((x) => !x.clearedAt);
+  if (!f) return data;
+  f.clearedAt = now;
+  return next;
+}
+
+export const activeFlag = (p) => p?.flags?.find((f) => !f.clearedAt) || null;
+
+// ---- directional position mismatch ----
+
+// null when positions agree (or can't be established). delta > 0 means the game's
+// position OVERPAYS vs where they really play — a player to exploit.
+export function mismatchInfo(data, playerId) {
+  const player = data.players[playerId];
+  if (!player?.gamePosition) return null;
+  let real = player.realPosition;
+  if (!real) {
+    const derived = deriveRealPosition(playerAppearances(data, playerId));
+    if (derived && derived.total >= 3) real = derived.position;
+  }
+  if (!real || real === player.gamePosition) return null;
+  const gamePts = playerTotals(data, playerId).points ?? 0;
+  const realPts = playerTotals(data, playerId, { position: real }).points ?? 0;
+  return { realPosition: real, delta: gamePts - realPts };
+}
+
+// ---- postponed/stale hygiene ----
+
+// A postponed event whose pairing+natural-round has a real sibling event is a dead
+// shell left behind by SofaScore rescheduling (they create a new event id).
+export function isSupersededPostponed(data, m) {
+  if (m.status !== "postponed" && m.status !== "canceled") return false;
+  return Object.values(data.matches).some((o) =>
+    o.eventId !== m.eventId && o.status !== "postponed" && o.status !== "canceled" &&
+    o.homeTeamId === m.homeTeamId && o.awayTeamId === m.awayTeamId && o.round === m.round);
+}
+
+// Matches that kicked off (>3h ago) whose stats we don't have yet.
+export function staleInfo(data, now) {
+  const cutoff = now - 3 * 3600 * 1000;
+  const missing = Object.values(data.matches).filter((m) =>
+    m.kickoff < cutoff &&
+    m.status !== "postponed" && m.status !== "canceled" &&
+    !(m.status === "finished" && m.importedAt) &&
+    !isSupersededPostponed(data, m));
+  return { count: missing.length };
 }

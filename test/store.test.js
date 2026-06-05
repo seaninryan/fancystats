@@ -3,7 +3,8 @@ import { describe, it, expect } from "vitest";
 import {
   emptyData, applyImport, upsertMatchStubs, setPlayerField,
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
-  applyPasteResults, matchRound, setMatchRound,
+  applyPasteResults, matchRound, setMatchRound, playerAppearances,
+  markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -202,5 +203,97 @@ describe("round overrides", () => {
     expect(matchRound(d.matches["100"])).toBe(14);
     d = upsertMatchStubs(d, [{ eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0 }], []);
     expect(matchRound(d.matches["100"])).toBe(14);
+  });
+});
+
+describe("availability flags", () => {
+  it("markOut adds an active flag; clearOut closes it; history retained", () => {
+    let d = markOut(importedFixture(), 10, "ACL injury", NOW);
+    expect(activeFlag(d.players["10"])).toMatchObject({ note: "ACL injury", setAt: NOW, clearedAt: null });
+    d = markOut(d, 10, "second note ignored while active", NOW + 1);
+    expect(d.players["10"].flags).toHaveLength(1);
+    d = clearOut(d, 10, NOW + 2);
+    expect(activeFlag(d.players["10"])).toBeNull();
+    expect(d.players["10"].flags[0].clearedAt).toBe(NOW + 2);
+    d = markOut(d, 10, "World Cup", NOW + 3);
+    expect(d.players["10"].flags).toHaveLength(2);
+    expect(activeFlag(d.players["10"]).note).toBe("World Cup");
+  });
+  it("flags survive re-import", () => {
+    let d = markOut(importedFixture(), 10, "suspended", NOW);
+    d = applyImport(d, {
+      match: { eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0, goalTimes: { home: [40], away: [] }, partial: false },
+      teams: [], players: [{ id: 10, name: "A Keena", teamId: 1 }], appearances: [],
+    }, NOW + 5);
+    expect(activeFlag(d.players["10"]).note).toBe("suspended");
+  });
+});
+
+describe("playerTotals options", () => {
+  it("position override re-scores without changing the stored position", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "DEF");
+    expect(playerTotals(d, 10).points).toBe(3 + 2 + 6 + 4);      // fullMatch+win+DEF goal+CS
+    expect(playerTotals(d, 10, { position: "FWD" }).points).toBe(3 + 2 + 4); // FWD goal, no CS
+    expect(d.players["10"].gamePosition).toBe("DEF");
+  });
+  it("eventIds filter restricts which matches count", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    expect(playerTotals(d, 10, { eventIds: new Set([100]) }).points).toBe(9);
+    const t = playerTotals(d, 10, { eventIds: new Set([999]) });
+    expect(t.points).toBe(0);
+    expect(t.minutes).toBe(0);
+  });
+});
+
+describe("mismatchInfo", () => {
+  const threeApps = (d) => {
+    for (const ev of [101, 102]) {
+      d.matches[ev] = { ...d.matches["100"], eventId: ev };
+      d.appearances[`${ev}:10`] = { ...d.appearances["100:10"], eventId: ev };
+    }
+    return d;
+  };
+  it("favourable: game DEF, really a FWD — positive delta", () => {
+    let d = threeApps(setPlayerField(importedFixture(), 10, "gamePosition", "DEF"));
+    const mi = mismatchInfo(d, 10);
+    expect(mi.realPosition).toBe("FWD");
+    expect(mi.delta).toBeGreaterThan(0); // DEF goals (6) + clean sheets beat FWD scoring
+  });
+  it("unfavourable: game FWD, really a DEF — negative delta", () => {
+    let d = threeApps(setPlayerField(importedFixture(), 10, "gamePosition", "FWD"));
+    d = setPlayerField(d, 10, "realPosition", "DEF");
+    expect(mismatchInfo(d, 10).delta).toBeLessThan(0);
+  });
+  it("null when no mismatch or too few observations", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    expect(mismatchInfo(d, 10)).toBeNull(); // only 1 appearance, no manual realPosition
+    d = setPlayerField(d, 10, "realPosition", "FWD");
+    expect(mismatchInfo(d, 10)).toBeNull(); // positions agree
+  });
+});
+
+describe("postponed hygiene", () => {
+  const withShell = () => {
+    let d = importedFixture();
+    d.matches["200"] = { eventId: 200, round: 1, kickoff: 1764800000000, status: "postponed", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null };
+    return d;
+  };
+  it("isSupersededPostponed: postponed twin of a real same-pairing same-round match", () => {
+    const d = withShell();
+    expect(isSupersededPostponed(d, d.matches["200"])).toBe(true);
+    expect(isSupersededPostponed(d, d.matches["100"])).toBe(false); // the real one
+  });
+  it("a lone postponed match is not superseded", () => {
+    let d = withShell();
+    d.matches["200"].awayTeamId = 99; // different pairing
+    expect(isSupersededPostponed(d, d.matches["200"])).toBe(false);
+  });
+  it("staleInfo counts played-but-missing matches, ignoring postponed/superseded", () => {
+    let d = withShell();
+    const now = 1765000000000;
+    d.matches["300"] = { eventId: 300, round: 2, kickoff: now - 4 * 3600 * 1000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 2, awayScore: 0 }; // finished, unimported
+    d.matches["301"] = { eventId: 301, round: 2, kickoff: now - 4 * 3600 * 1000, status: "notstarted", homeTeamId: 2, awayTeamId: 1, homeScore: null, awayScore: null }; // stale stub
+    d.matches["302"] = { eventId: 302, round: 3, kickoff: now + 4 * 3600 * 1000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null }; // future
+    expect(staleInfo(d, now).count).toBe(2); // 300 + 301; shell 200 excluded, 302 future, 100 imported
   });
 });
