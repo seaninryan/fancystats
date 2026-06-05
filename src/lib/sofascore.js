@@ -96,7 +96,8 @@ export function normalize(eventPayload, lineupsPayload, incidentsPayload) {
 export const API = "https://api.sofascore.com/api/v1";
 
 export async function fetchJson(path, fetcher = (...a) => fetch(...a)) {
-  const res = await fetcher(API + path);
+  // SofaScore's CDN blocks requests with a github.io Referer; never send one.
+  const res = await fetcher(API + path, { referrerPolicy: "no-referrer" });
   if (!res.ok) {
     const err = new Error(`SofaScore ${res.status} for ${path}`);
     err.status = res.status;

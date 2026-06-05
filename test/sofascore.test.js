@@ -28,6 +28,12 @@ describe("fetchJson", () => {
     const f = stub({ "/event/1": { status: 403, body: {} } });
     await expect(fetchJson("/event/1", f)).rejects.toThrow("403");
   });
+  it("suppresses the Referer header (SofaScore 403s github.io referrers)", async () => {
+    let seenOpts;
+    const f = async (url, opts) => { seenOpts = opts; return { ok: true, status: 200, json: async () => ({}) }; };
+    await fetchJson("/x", f);
+    expect(seenOpts?.referrerPolicy).toBe("no-referrer");
+  });
 });
 
 describe("fetchSeasonEvents", () => {
