@@ -103,21 +103,21 @@ export default function TeamsTab({ data, update, openPlayer }) {
   // Windowed running totals per player (adjustment-aware, like PlayerDetail).
   const totals = new Map(); // pid -> {apps, minutes, goals, assists, points|null}
   for (const a of apps) {
-    if (!totals.has(a.playerId)) totals.set(a.playerId, { apps: 0, minutes: 0, goals: 0, assists: 0, points: null });
+    if (!totals.has(a.playerId)) totals.set(a.playerId, { apps: 0, minutes: 0, goals: 0, assists: 0, points: null, seasonPoints: null });
     const t = totals.get(a.playerId);
     t.apps++; // all-time, used for default row order
-    if (!windowIds.has(a.eventId)) continue;
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    const pp = data.players[a.playerId];
+    const m = data.matches[a.eventId];
+    const pts = pp?.gamePosition && m?.goalTimes ? scoreAppearance(a, m, pp.gamePosition, adj).total : null;
+    if (pts != null) t.seasonPoints = (t.seasonPoints ?? 0) + pts; // site cross-check is season-wide
+    if (!windowIds.has(a.eventId)) continue;
     const g = (a.goals || 0) + (typeof adj?.goals === "number" ? adj.goals : 0);
     const as = (a.assists || 0) + (typeof adj?.assists === "number" ? adj.assists : 0);
     t.minutes += (a.minutes || 0) + (typeof adj?.minutes === "number" ? adj.minutes : 0);
     t.goals += Math.max(0, g);
     t.assists += Math.max(0, as);
-    const p = data.players[a.playerId];
-    const m = data.matches[a.eventId];
-    if (p?.gamePosition && m?.goalTimes) {
-      t.points = (t.points ?? 0) + scoreAppearance(a, m, p.gamePosition, adj).total;
-    }
+    if (pts != null) t.points = (t.points ?? 0) + pts;
   }
 
   const playerIds = [...totals.keys()].sort((a, b) => {
@@ -230,6 +230,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
                 // window = the player's current team's last games (same on every page)
                 const hot = isHot(data, pid, playerApps);
                 const hotEvents = hotEventIds(data, pid, playerApps);
+                const siteDelta = p?.sitePoints != null && t.seasonPoints != null ? t.seasonPoints - p.sitePoints : null;
                 return (
                   <tr key={pid}>
                     <td>
@@ -248,7 +249,10 @@ export default function TeamsTab({ data, update, openPlayer }) {
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
-                    <td className={err ? "err-cell" : ""} title={err ? "No fantasy data — set a position or add their fantasy alias in the player view" : ""}>{err ? "❗" : t.points ?? "—"}</td>
+                    <td className={`${err ? "err-cell" : ""}${siteDelta ? ` pts-diff ${siteDelta < 0 ? "site-up" : "site-down"}` : ""}`}
+                      title={err ? "No fantasy data — set a position or add their fantasy alias in the player view"
+                        : siteDelta ? `${siteDelta > 0 ? "+" : ""}${siteDelta} vs official site (ours ${t.seasonPoints} · site ${p.sitePoints})` : ""}>
+                      {err ? "❗" : t.points ?? "—"}</td>
                     {matches.map((m) => {
                       const key = `${m.eventId}:${pid}`;
                       const a = byPlayerMatch.get(key);

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { leagueTable } from "../lib/store.js";
+import { leagueTable, teamSitePoints } from "../lib/store.js";
 import { teamWeeklySeries, TEAM_STATS } from "../lib/series.js";
 import { teamColor } from "../lib/teamColors.js";
 import GameweekChart from "./GameweekChart.jsx";
@@ -44,6 +44,14 @@ export default function TableTab({ data }) {
     }];
   }), [data, selected, stat]);
 
+  const siteTotals = useMemo(() => teamSitePoints(data), [data]);
+  // cross-check is season-vs-site even when the table is windowed
+  const seasonFantasy = useMemo(() => {
+    const m = new Map();
+    for (const r of leagueTable(data, null)) m.set(r.teamId, r.fantasy);
+    return m;
+  }, [data]);
+
   return (
     <div>
       <GameweekChart series={chartSeries} cumulative={cumulative}
@@ -81,11 +89,24 @@ export default function TableTab({ data }) {
                       title="add to graph" onClick={(e) => { e.stopPropagation(); toggleSelected(r.teamId); }}>📈</button>
                     {" "}{i + 1} <TeamPill team={data.teams[r.teamId]} />
                   </td>
-                  {COLS.map(([key]) => (
-                    <td key={key} title={key === "pensScored" && r.pensMissed ? `${r.pensMissed} missed` : ""}>
-                      {r[key]}
-                    </td>
-                  ))}
+                  {COLS.map(([key]) => {
+                    if (key === "fantasy") {
+                      const st = siteTotals.get(r.teamId);
+                      const ours = seasonFantasy.get(r.teamId) ?? 0;
+                      const delta = st?.withData ? ours - st.site : null;
+                      return (
+                        <td key={key} className={delta ? `pts-diff ${delta < 0 ? "site-up" : "site-down"}` : ""}
+                          title={delta ? `${delta > 0 ? "+" : ""}${delta} vs official site (ours ${ours} · site ${st.site}${st.missing ? ` · ${st.missing} players missing site data` : ""})` : ""}>
+                          {r[key]}
+                        </td>
+                      );
+                    }
+                    return (
+                      <td key={key} title={key === "pensScored" && r.pensMissed ? `${r.pensMissed} missed` : ""}>
+                        {r[key]}
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>

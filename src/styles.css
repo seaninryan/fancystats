@@ -108,7 +108,9 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 .sticky-col tbody tr.selected:hover td:first-child { background: #ddeee5; }
 .freeze-stats tbody tr:hover td:nth-child(-n+6) { background: #eaf0f4; }
 
-/* site-points cross-check marker (Players Pts cell) */
+/* site-points cross-check marker: green = site total higher than ours, red = lower */
 .pts-diff { position: relative; }
 .pts-diff::after { content: ""; position: absolute; top: 0; right: 0;
-  border-top: 6px solid var(--warn); border-left: 6px solid transparent; }
+  border-left: 6px solid transparent; }
+.pts-diff.site-up::after { border-top: 6px solid var(--accent); }
+.pts-diff.site-down::after { border-top: 6px solid var(--err); }

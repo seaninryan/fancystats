@@ -12,7 +12,7 @@ const COLS = [
   ["pos", "Pos", "fantasy game position (▲▼ = differs from where they really play)"],
   ["price", "€", "price on the fantasy site"],
   ["points", "Pts", "fantasy points in the selected window"],
-  ["goals", "G", "goals"], ["assists", "A", "assists"], ["minutes", "Min", "minutes played"],
+  ["goals", "G", "goals"], ["assists", "A", "assists"], ["pens", "Pen", "penalties scored"], ["minutes", "Min", "minutes played"],
   ["starts", "St", "matches started"], ["subApps", "Sub", "appearances as a substitute"],
 ];
 
@@ -152,14 +152,14 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
-                <td className={`${r.err ? "err-cell" : ""}${r.siteDelta ? " pts-diff" : ""}`}
+                <td className={`${r.err ? "err-cell" : ""}${r.siteDelta ? ` pts-diff ${r.siteDelta < 0 ? "site-up" : "site-down"}` : ""}`}
                   title={r.err ? "No fantasy data — set a position or add their fantasy alias in the player view"
                     : r.siteDelta ? `${r.siteDelta > 0 ? "+" : ""}${r.siteDelta} vs official site (ours ${r.seasonPts} · site ${r.sitePoints})` : ""}>
                   {r.err ? "❗" : r.points ?? "—"}</td>
                 {win !== "all" && (
                   <td>{r.climb == null ? "—" : <span className={r.climb >= 0 ? "gain" : "loss"}>{(r.climb >= 0 ? "+" : "") + r.climb.toFixed(1)}</span>}</td>
                 )}
-                <td>{r.goals}</td><td>{r.assists}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
+                <td>{r.goals}</td><td>{r.assists}</td><td>{r.pens}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
             ))}
           </tbody>

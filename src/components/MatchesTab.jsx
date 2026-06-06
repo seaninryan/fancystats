@@ -91,6 +91,13 @@ export default function MatchesTab({ data, update }) {
             Import all missing ({missing.length})
           </button>
         )}
+        {matches.some((m) => m.importedAt) && (
+          <button disabled={!!busy}
+            title="refresh every imported match with the current importer — stats added since import day (e.g. penalties) get backfilled"
+            onClick={() => runImport(matches.filter((m) => m.importedAt).map((m) => m.eventId))}>
+            ↻ Re-import all ({matches.filter((m) => m.importedAt).length})
+          </button>
+        )}
         {busy && <span className="dim">{busy}</span>}
         {data.meta.lastEventSync && !busy && (
           <span className="dim">synced {fmtDate(data.meta.lastEventSync)}</span>
