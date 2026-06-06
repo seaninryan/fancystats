@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { matchRound, setPlayerField, playerName, missingFantasyData, setAbsence, getAbsence, playerOutNow, setTeamColor, isHot } from "../lib/store.js";
+import { matchRound, setPlayerField, playerName, missingFantasyData, setAbsence, getAbsence, playerOutNow, setTeamColor, isHot, hotEventIds } from "../lib/store.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { teamColor } from "../lib/teamColors.js";
 import { TeamPill, PosPill, PtsPill } from "./Pills.jsx";
@@ -222,9 +222,11 @@ export default function TeamsTab({ data, update, openPlayer }) {
                 const p = data.players[pid];
                 const t = totals.get(pid);
                 const out = playerOutNow(data, pid, now);
-                const err = missingFantasyData(p, apps.filter((x) => x.playerId === pid));
+                const playerApps = apps.filter((x) => x.playerId === pid);
+                const err = missingFantasyData(p, playerApps);
                 // window = the player's current team's last games (same on every page)
-                const hot = isHot(data, pid, apps.filter((x) => x.playerId === pid));
+                const hot = isHot(data, pid, playerApps);
+                const hotEvents = hotEventIds(data, pid, playerApps);
                 return (
                   <tr key={pid}>
                     <td>
@@ -260,8 +262,8 @@ export default function TeamsTab({ data, update, openPlayer }) {
                         );
                       }
                       return (
-                        <td key={m.eventId} className={`${cls}${winCls}`} title={title}>
-                          <span className="cell-wrap"><span>{sym}</span><PtsPill pts={pts} /></span>
+                        <td key={m.eventId} className={`${cls}${winCls}`} title={hotEvents.has(m.eventId) ? `${title} — in form` : title}>
+                          <span className="cell-wrap"><span>{hotEvents.has(m.eventId) ? "🔥" : ""}{sym}</span><PtsPill pts={pts} /></span>
                         </td>
                       );
                     })}
