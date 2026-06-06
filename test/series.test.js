@@ -4,7 +4,7 @@ import {
   emptyData, applyImport, setPlayerField, setAdjustment, setMatchRound, upsertMatchStubs,
 } from "../src/lib/store.js";
 // NOTE: import only what exists so far — Tasks 3-5 each add their function here.
-import { importedRounds, accumulate } from "../src/lib/series.js";
+import { importedRounds, accumulate, playerWeeklySeries } from "../src/lib/series.js";
 
 const NOW = 1765000000000;
 
@@ -78,5 +78,31 @@ describe("accumulate", () => {
   });
   it("handles empty input", () => {
     expect(accumulate([])).toEqual([]);
+  });
+});
+
+describe("playerWeeklySeries", () => {
+  it("scores per round: gap when team did not play, 0 when player sat out", () => {
+    const s = playerWeeklySeries(fixture(), 10);
+    expect(rounds(s)).toEqual([1, 2, 3, 4]);
+    expect(values(s)).toEqual([9, 3, null, 0]); // R4: team played, no appearance
+  });
+  it("works for the away-team player too", () => {
+    expect(values(playerWeeklySeries(fixture(), 20))).toEqual([3, 6, null, -1]);
+  });
+  it("accepts string player ids (object-key form)", () => {
+    expect(values(playerWeeklySeries(fixture(), "10"))).toEqual([9, 3, null, 0]);
+  });
+  it("includes adjustments", () => {
+    const d = setAdjustment(fixture(), "100:10", { goals: 1 });
+    expect(values(playerWeeklySeries(d, 10))).toEqual([13, 3, null, 0]); // +1 FWD goal = +4
+  });
+  it("respects roundOverride", () => {
+    const d = setMatchRound(fixture(), 102, 3);
+    expect(values(playerWeeklySeries(d, 10))).toEqual([9, 3, 0]);
+  });
+  it("is all null for a player with no game position", () => {
+    const d = setPlayerField(fixture(), 10, "gamePosition", null);
+    expect(values(playerWeeklySeries(d, 10))).toEqual([null, null, null, null]);
   });
 });
