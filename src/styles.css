@@ -13,7 +13,8 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 input, select, textarea { font: inherit; color: inherit; background: var(--panel);
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 table { border-collapse: collapse; width: 100%; }
-th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); white-space: nowrap; }
+th:last-child, td:last-child { border-right: none; }
 th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top: 0; background: var(--bg); }
 .tabs { display: flex; gap: 6px; padding: 10px; position: sticky; top: 0; background: var(--bg); z-index: 5; }
 .tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
