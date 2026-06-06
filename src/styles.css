@@ -99,3 +99,16 @@ tr.selected td { background: #e9f3ee; }
   .freeze-stats td:nth-child(n+2):nth-child(-n+6) { position: static; width: auto; }
   .player-cell { width: auto; }
 }
+
+/* subtle row emphasis on hover */
+tbody tr:hover td { background: #eaf0f4; }
+tbody tr.selected:hover td { background: #ddeee5; }
+tbody tr:hover td.err-cell { background: #fbdcd7; }
+.sticky-col tbody tr:hover td:first-child { background: #eaf0f4; }
+.sticky-col tbody tr.selected:hover td:first-child { background: #ddeee5; }
+.freeze-stats tbody tr:hover td:nth-child(-n+6) { background: #eaf0f4; }
+
+/* site-points cross-check marker (Players Pts cell) */
+.pts-diff { position: relative; }
+.pts-diff::after { content: ""; position: absolute; top: 0; right: 0;
+  border-top: 6px solid var(--warn); border-left: 6px solid transparent; }

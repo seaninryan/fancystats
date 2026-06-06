@@ -24,7 +24,7 @@ export default function SettingsTab({ data, update }) {
     const linked = preview.unmatched
       .map((u, i) => ({ u, pid: preview.links[i] }))
       .filter((x) => x.pid)
-      .map(({ u, pid }) => ({ playerId: pid, name: u.name, value: u.value, alias: u.name }));
+      .map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
     const now = Date.now();
     update((d) => applyPasteResults(d, [...preview.matched, ...linked], kind, now));
     setPreview(null); setText("");
@@ -61,7 +61,7 @@ export default function SettingsTab({ data, update }) {
             <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched</p>
             {preview.unmatched.map((u, i) => (
               <div className="row" key={i}>
-                <span style={{ flex: 1 }}>“{u.name}” ({u.value})</span>
+                <span style={{ flex: 1 }}>&ldquo;{u.name}&rdquo; ({u.value}{u.price != null ? ` · €${u.price}` : ""})</span>
                 <select value={preview.links[i] || ""}
                   onChange={(e) => setPreview({ ...preview, links: { ...preview.links, [i]: e.target.value || undefined } })}>
                   <option value="">skip</option>

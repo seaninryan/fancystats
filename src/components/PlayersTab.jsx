@@ -46,6 +46,8 @@ export default function PlayersTab({ data, update, openPlayer }) {
     return Object.entries(data.players).map(([id, p]) => {
       const team = data.teams[p.teamId];
       const apps = index.get(Number(id)) || [];
+      const t = playerTotals(data, id, { apps, eventIds: windows ? windows.get(p.teamId) || new Set() : undefined });
+      const seasonPts = windows ? playerTotals(data, id, { apps }).points : t.points;
       return {
         id, name: playerName(p), teamId: p.teamId, team,
         teamName: team?.shortName || "?",
@@ -56,7 +58,11 @@ export default function PlayersTab({ data, update, openPlayer }) {
         mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
         climb: windows ? playerClimb(data, id, { apps, windowIds: windows.get(p.teamId) || new Set() }) : null,
-        ...playerTotals(data, id, { apps, eventIds: windows ? windows.get(p.teamId) || new Set() : undefined }),
+        sitePoints: p.sitePoints ?? null,
+        seasonPts,
+        // cross-check is season-vs-site even when a window narrows the Pts column
+        siteDelta: p.sitePoints != null && seasonPts != null ? seasonPts - p.sitePoints : null,
+        ...t,
       };
     });
   }, [data, win]);
@@ -146,7 +152,10 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
-                <td className={r.err ? "err-cell" : ""} title={r.err ? "No fantasy data — set a position or add their fantasy alias in the player view" : ""}>{r.err ? "❗" : r.points ?? "—"}</td>
+                <td className={`${r.err ? "err-cell" : ""}${r.siteDelta ? " pts-diff" : ""}`}
+                  title={r.err ? "No fantasy data — set a position or add their fantasy alias in the player view"
+                    : r.siteDelta ? `${r.siteDelta > 0 ? "+" : ""}${r.siteDelta} vs official site (ours ${r.seasonPts} · site ${r.sitePoints})` : ""}>
+                  {r.err ? "❗" : r.points ?? "—"}</td>
                 {win !== "all" && (
                   <td>{r.climb == null ? "—" : <span className={r.climb >= 0 ? "gain" : "loss"}>{(r.climb >= 0 ? "+" : "") + r.climb.toFixed(1)}</span>}</td>
                 )}
