@@ -75,17 +75,21 @@ tr.selected td { background: #e9f3ee; }
 }
 
 /* Teams grid: freeze the totals block (Player, Pos, Min, G, A, Pts) on desktop.
-   Fixed widths + cumulative left offsets — sticky columns need both. */
+   Fixed widths + cumulative left offsets — sticky columns need both.
+   Separate borders: in collapsed tables Chrome mis-anchors sticky cells and
+   treats cell widths loosely, which let the grid slide under the frozen block. */
+.freeze-stats { border-collapse: separate; border-spacing: 0; }
 .freeze-stats th:nth-child(-n+6), .freeze-stats td:nth-child(-n+6) {
   position: sticky; background: var(--bg); z-index: 2;
 }
 .freeze-stats th:nth-child(-n+6) { z-index: 3; } /* header cells sit above body cells */
-.freeze-stats th:nth-child(1), .freeze-stats td:nth-child(1) { left: 0; width: 210px; }
-.freeze-stats th:nth-child(2), .freeze-stats td:nth-child(2) { left: 210px; width: 52px; }
-.freeze-stats th:nth-child(3), .freeze-stats td:nth-child(3) { left: 262px; width: 56px; }
-.freeze-stats th:nth-child(4), .freeze-stats td:nth-child(4) { left: 318px; width: 40px; }
-.freeze-stats th:nth-child(5), .freeze-stats td:nth-child(5) { left: 358px; width: 40px; }
-.freeze-stats th:nth-child(6), .freeze-stats td:nth-child(6) { left: 398px; width: 56px; }
+/* widths are generous so chips/sort-arrows can't force a column past its offset */
+.freeze-stats th:nth-child(1), .freeze-stats td:nth-child(1) { left: 0; width: 210px; min-width: 210px; }
+.freeze-stats th:nth-child(2), .freeze-stats td:nth-child(2) { left: 210px; width: 60px; min-width: 60px; }
+.freeze-stats th:nth-child(3), .freeze-stats td:nth-child(3) { left: 270px; width: 64px; min-width: 64px; }
+.freeze-stats th:nth-child(4), .freeze-stats td:nth-child(4) { left: 334px; width: 48px; min-width: 48px; }
+.freeze-stats th:nth-child(5), .freeze-stats td:nth-child(5) { left: 382px; width: 48px; min-width: 48px; }
+.freeze-stats th:nth-child(6), .freeze-stats td:nth-child(6) { left: 430px; width: 64px; min-width: 64px; }
 /* fixed-width name cell so long names ellipsize instead of breaking the offsets */
 .player-cell { display: flex; align-items: center; gap: 4px; width: 194px; }
 .player-cell a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
