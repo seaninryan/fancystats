@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
-import { playerWeeklySeries } from "../lib/series.js";
+import { playerWeeklySeries, PLAYER_STATS } from "../lib/series.js";
 import GameweekChart from "./GameweekChart.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
@@ -28,6 +28,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
   const [sort, setSort] = useState({ key: "points", dir: -1 });
   const [selected, setSelected] = useState(() => new Set()); // player ids for the graph
   const [cumulative, setCumulative] = useState(false);
+  const [stat, setStat] = useState("fantasy");
   const toggleSelected = (id) => setSelected((prev) => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -60,9 +61,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
     return [{
       key: String(id), label: playerName(p),
       color: teamColor(data.teams[p.teamId]).bg,
-      points: playerWeeklySeries(data, id),
+      points: playerWeeklySeries(data, id, stat),
     }];
-  }), [data, selected]);
+  }), [data, selected, stat]);
 
   const shown = rows
     .filter((r) =>
@@ -85,7 +86,11 @@ export default function PlayersTab({ data, update, openPlayer }) {
     <div>
       <GameweekChart series={chartSeries} cumulative={cumulative}
         onToggleCumulative={() => setCumulative((c) => !c)}
-        onClear={() => setSelected(new Set())} />
+        onClear={() => setSelected(new Set())}>
+        {PLAYER_STATS.map(([key, label]) => (
+          <button key={key} className={stat === key ? "primary" : ""} onClick={() => setStat(key)}>{label}</button>
+        ))}
+      </GameweekChart>
       <div className="row" style={{ margin: "8px 0" }}>
         <select value={filters.team} onChange={(e) => setFilters({ ...filters, team: e.target.value })}>
           <option value="all">All teams</option>
