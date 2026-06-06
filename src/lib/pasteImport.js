@@ -24,19 +24,27 @@ const STOPWORDS = new Set([
 
 const isStopword = (s) => STOPWORDS.has(normalizeName(s));
 
-// -> [{ name, value }]
-// Handles: "Name\t10", "Name\tTeam\t10", "1\tName\t10", and vertical copies
-// ("Name" / "10" on separate lines, possibly with a rank column between).
+// -> [{ name, value, price? }]
+// Handles: "Name\t10", "Name\tTeam\t10", "1\tName\t10", vertical copies
+// ("Name" / "10" on separate lines, possibly with a rank column between), and
+// the two-column site format ("Name" then "Club Picture\t4.0\t25") where the
+// decimal first number is the price and the last number the site's total.
 // Values are NOT range-validated here: the same parser serves price pastes and
 // position pastes whose statistic column varies; the preview UI shows values.
 export function parsePaste(text) {
   const rows = [];
   let pendingName = null;
-  let pendingValue = null;
+  let pendingNums = [];
+  const rowFrom = (name, nums) => {
+    const row = { name, value: parseFloat(nums[nums.length - 1]) };
+    // price column: only a decimal-formatted leading number (a rank never is)
+    if (nums.length >= 2 && /^\d+\.\d+$/.test(nums[0])) row.price = parseFloat(nums[0]);
+    return row;
+  };
   const commit = () => {
-    if (pendingName && pendingValue != null) rows.push({ name: pendingName, value: pendingValue });
+    if (pendingName && pendingNums.length) rows.push(rowFrom(pendingName, pendingNums));
     pendingName = null;
-    pendingValue = null;
+    pendingNums = [];
   };
   for (const raw of text.split(/\r?\n/)) {
     const line = raw.trim();
@@ -47,13 +55,21 @@ export function parsePaste(text) {
       const nums = fields.map((f) => f.trim()).filter((f) => NUM_RE.test(f));
       if (nameField && nums.length) {
         commit();
-        rows.push({ name: nameField.trim(), value: parseFloat(nums[nums.length - 1]) });
+        rows.push(rowFrom(nameField.trim(), nums));
+        continue;
+      }
+      // furniture row ("Club Picture  4.0  25"): all word fields are
+      // stopwords — its numbers belong to the pending name above
+      if (!nameField && nums.length && pendingName) {
+        pendingNums.push(...nums);
+        commit();
         continue;
       }
     }
     if (NUM_RE.test(line)) {
-      // last number before the next name wins, so a rank column can't pose as the value
-      if (pendingName) pendingValue = parseFloat(line);
+      // numbers accumulate; rowFrom takes the last as the value, so a rank
+      // line can't pose as the value (same effect as the old last-wins rule)
+      if (pendingName) pendingNums.push(line);
     } else if (NAME_RE.test(line) && !isStopword(line)) {
       commit();
       pendingName = line;
@@ -95,7 +111,7 @@ export function matchPlayers(rows, players) {
       const candidates = key ? byInitial.get(key) || [] : [];
       if (candidates.length === 1) id = candidates[0];
     }
-    if (id) matched.push({ playerId: id, name: row.name, value: row.value });
+    if (id) matched.push({ playerId: id, ...row });
     else unmatched.push(row);
   }
   return { matched, unmatched };

@@ -121,3 +121,30 @@ describe("matchPlayers with customName", () => {
     expect(matched[0]?.playerId).toBe("30");
   });
 });
+
+describe("two-column site format (price + total points)", () => {
+  it("attaches furniture-line numbers to the name above (tabs)", () => {
+    expect(parsePaste("Arlo Doherty\nClub Picture\t4.0\t25\nBrian Maher\nClub Picture\t5.9\t5")).toEqual([
+      { name: "Arlo Doherty", value: 25, price: 4 },
+      { name: "Brian Maher", value: 5, price: 5.9 },
+    ]);
+  });
+  it("multi-space separators work too", () => {
+    expect(parsePaste("Conor Kearns\nClub Picture    4.8    25")).toEqual([
+      { name: "Conor Kearns", value: 25, price: 4.8 },
+    ]);
+  });
+  it("a leading integer rank is never taken as a price", () => {
+    expect(parsePaste("1\tJohn Smith\t10")).toEqual([{ name: "John Smith", value: 10 }]);
+  });
+  it("vertical decimal variant: price line then points line", () => {
+    expect(parsePaste("Wessel Speel\n5.5\n96")).toEqual([
+      { name: "Wessel Speel", value: 96, price: 5.5 },
+    ]);
+  });
+  it("matchPlayers carries the price through", () => {
+    const players = { 7: { name: "Arlo Doherty" } };
+    const { matched } = matchPlayers([{ name: "Arlo Doherty", value: 25, price: 4 }], players);
+    expect(matched).toEqual([{ playerId: "7", name: "Arlo Doherty", value: 25, price: 4 }]);
+  });
+});
