@@ -4,7 +4,7 @@ import {
   emptyData, applyImport, setPlayerField, setAdjustment, setMatchRound, upsertMatchStubs,
 } from "../src/lib/store.js";
 // NOTE: import only what exists so far — Tasks 3-5 each add their function here.
-import { importedRounds, accumulate, playerWeeklySeries, teamWeeklySeries } from "../src/lib/series.js";
+import { importedRounds, accumulate, playerWeeklySeries, teamWeeklySeries, chartRows } from "../src/lib/series.js";
 
 const NOW = 1765000000000;
 
@@ -133,5 +133,20 @@ describe("teamWeeklySeries", () => {
   it("respects roundOverride", () => {
     const moved = setMatchRound(d, 102, 3);
     expect(values(teamWeeklySeries(moved, 1, "points"))).toEqual([3, 1, 3]);
+  });
+});
+
+describe("chartRows", () => {
+  it("pivots series into one row per round keyed by series key", () => {
+    expect(chartRows([
+      { key: "a", label: "A", color: "#fff", points: [{ round: 1, value: 2 }, { round: 2, value: null }] },
+      { key: "b", label: "B", color: "#000", points: [{ round: 1, value: 0 }, { round: 2, value: 4 }] },
+    ])).toEqual([
+      { round: 1, a: 2, b: 0 },
+      { round: 2, a: null, b: 4 },
+    ]);
+  });
+  it("is empty for no series", () => {
+    expect(chartRows([])).toEqual([]);
   });
 });

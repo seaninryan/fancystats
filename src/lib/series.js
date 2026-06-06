@@ -107,3 +107,14 @@ export function teamWeeklySeries(data, teamId, stat) {
   }
   return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));
 }
+
+// Pivot series into recharts rows: [{ round, [series.key]: value }]. All series
+// share the importedRounds() x-domain, so index i is the same round everywhere.
+export function chartRows(series) {
+  if (!series.length) return [];
+  return series[0].points.map((p, i) => {
+    const row = { round: p.round };
+    for (const s of series) row[s.key] = s.points[i].value;
+    return row;
+  });
+}
