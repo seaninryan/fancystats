@@ -395,6 +395,22 @@ export function teamWindowEventIds(data, n) {
   return out;
 }
 
+// Form vs baseline: fantasy points per TEAM match in the window minus the same
+// over all earlier imported matches. Per team-match (not per appearance) so
+// sitting out drags form down, consistent with the hot rule. null without a
+// position, an empty window, or no baseline games (can't climb vs nothing).
+export function playerClimb(data, playerId, { apps = null, windowIds } = {}) {
+  const player = data.players[playerId];
+  if (!player?.gamePosition || !windowIds?.size) return null;
+  const prior = teamImportedMatches(data, player.teamId)
+    .filter((m) => !windowIds.has(m.eventId));
+  if (!prior.length) return null;
+  const priorIds = new Set(prior.map((m) => m.eventId));
+  const w = playerTotals(data, playerId, { apps, eventIds: windowIds }).points ?? 0;
+  const p = playerTotals(data, playerId, { apps, eventIds: priorIds }).points ?? 0;
+  return w / windowIds.size - p / priorIds.size;
+}
+
 // League table over imported matches. win = null (all) or N (each club's last
 // N imported games, same window the rest of the app uses). League order:
 // points, then goal difference, then goals scored.

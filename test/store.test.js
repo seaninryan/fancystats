@@ -10,6 +10,7 @@ import {
   setAbsence, getAbsence, playerOutNow,
   teamWindowEventIds, leagueTable,
   hotEventIds,
+  playerClimb,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -609,5 +610,62 @@ describe("hotEventIds", () => {
     const d = setAdjustment(hotFixture(), "303:50", { goals: 2 });
     expect(hotEventIds(d, 50).has(304)).toBe(true);
     expect(isHot(d, 50)).toBe(true); // and the row flame agrees
+  });
+});
+
+describe("playerClimb", () => {
+  const appC = (eventId, playerId, over = {}) => ({
+    eventId, playerId, teamId: 11, started: true, subOnMin: null, subOffMin: null,
+    minutes: 90, positionPlayed: "F", goals: 0, assists: 0, ownGoals: 0,
+    yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0, ...over,
+  });
+  const matchC = (eventId, round, kickoff, homeScore, awayScore, goalTimes) => ({
+    eventId, round, kickoff, status: "finished", homeTeamId: 11, awayTeamId: 12,
+    homeScore, awayScore, goalTimes, partial: false,
+  });
+  function climbFixture() {
+    let d = emptyData();
+    const imports = [
+      { match: matchC(401, 1, NOW + 1000, 0, 1, { home: [], away: [50] }),
+        appearances: [appC(401, 60), appC(401, 61, { positionPlayed: "M", assists: 1 })] },
+      { match: matchC(402, 2, NOW + 2000, 0, 2, { home: [], away: [20, 70] }),
+        appearances: [appC(402, 60), appC(402, 61, { positionPlayed: "M" })] },
+      { match: matchC(403, 3, NOW + 3000, 2, 0, { home: [10, 20], away: [] }),
+        appearances: [appC(403, 60, { goals: 1 })] },
+      { match: matchC(404, 4, NOW + 4000, 3, 0, { home: [5, 15, 25], away: [] }),
+        appearances: [appC(404, 60, { goals: 2 })] },
+    ];
+    for (const imp of imports) {
+      d = applyImport(d, {
+        ...imp,
+        teams: [{ id: 11, name: "Climb FC", shortName: "CLI" }, { id: 12, name: "Sink FC", shortName: "SNK" }],
+        players: [{ id: 60, name: "U Pward", teamId: 11 }, { id: 61, name: "D Ownward", teamId: 11 }],
+      }, NOW);
+    }
+    d = setPlayerField(d, 60, "gamePosition", "FWD");
+    d = setPlayerField(d, 61, "gamePosition", "MID");
+    return d;
+  }
+  const win3 = (d) => teamWindowEventIds(d, 3).get(11);
+  it("positive for an improving player (per team-match, window vs prior)", () => {
+    const d = climbFixture();
+    expect(playerClimb(d, 60, { windowIds: win3(d) })).toBeCloseTo(16 / 3, 5);
+  });
+  it("negative for a declining player; absences drag the window down", () => {
+    const d = climbFixture();
+    expect(playerClimb(d, 61, { windowIds: win3(d) })).toBeCloseTo(-5, 5);
+  });
+  it("null when the window spans all imported matches (no baseline)", () => {
+    const d = climbFixture();
+    expect(playerClimb(d, 60, { windowIds: teamWindowEventIds(d, 5).get(11) })).toBeNull();
+  });
+  it("null without a fantasy position", () => {
+    const d = setPlayerField(climbFixture(), 60, "gamePosition", null);
+    expect(playerClimb(d, 60, { windowIds: win3(d) })).toBeNull();
+  });
+  it("null for an empty or missing window", () => {
+    const d = climbFixture();
+    expect(playerClimb(d, 60, { windowIds: new Set() })).toBeNull();
+    expect(playerClimb(d, 60, {})).toBeNull();
   });
 });
