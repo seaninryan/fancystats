@@ -12,6 +12,7 @@ const COLS = [
   ["pos", "Pos", "fantasy game position (▲▼ = differs from where they really play)"],
   ["price", "€", "price on the fantasy site"],
   ["points", "Pts", "fantasy points in the selected window"],
+  ["value", "Val", "value: fantasy points per € (uses the selected window)"],
   ["goals", "G", "goals"], ["assists", "A", "assists"], ["pens", "Pen", "penalties scored"], ["minutes", "Min", "minutes played"],
   ["starts", "St", "matches started"], ["subApps", "Sub", "appearances as a substitute"],
 ];
@@ -58,6 +59,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
         mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
         climb: windows ? playerClimb(data, id, { apps, windowIds: windows.get(p.teamId) || new Set() }) : null,
+        value: t.points != null && p.price ? t.points / p.price : null,
         sitePoints: p.sitePoints ?? null,
         seasonPts,
         // cross-check is season-vs-site even when a window narrows the Pts column
@@ -159,6 +161,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 {win !== "all" && (
                   <td>{r.climb == null ? "—" : <span className={r.climb >= 0 ? "gain" : "loss"}>{(r.climb >= 0 ? "+" : "") + r.climb.toFixed(1)}</span>}</td>
                 )}
+                <td>{r.value == null ? "—" : r.value.toFixed(1)}</td>
                 <td>{r.goals}</td><td>{r.assists}</td><td>{r.pens}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
             ))}
