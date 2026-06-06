@@ -55,3 +55,55 @@ export function playerWeeklySeries(data, playerId) {
   }
   return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));
 }
+
+// Stat selector for the Table tab graph: [key, button label].
+export const TEAM_STATS = [
+  ["points", "Pts"], ["fantasy", "FPts"], ["yellows", "Yel"], ["reds", "Red"], ["assists", "Ast"],
+];
+
+// One team's per-gameweek value. stat: "points" (league 3/1/0) | "fantasy" |
+// "yellows" | "reds" | "assists". Accounting mirrors leagueTable so the graph
+// always agrees with the table columns.
+export function teamWeeklySeries(data, teamId, stat) {
+  const rounds = importedRounds(data);
+  const tid = Number(teamId);
+  const byRound = new Map();
+  for (const m of Object.values(data.matches)) {
+    if (!imported(m) || (m.homeTeamId !== tid && m.awayTeamId !== tid)) continue;
+    const r = matchRound(m);
+    if (r == null) continue;
+    let v = byRound.get(r) || 0;
+    if (stat === "points" && m.homeScore != null && m.awayScore != null) {
+      const gf = m.homeTeamId === tid ? m.homeScore : m.awayScore;
+      const ga = m.homeTeamId === tid ? m.awayScore : m.homeScore;
+      v += gf > ga ? 3 : gf === ga ? 1 : 0;
+    }
+    byRound.set(r, v);
+  }
+  if (stat !== "points") {
+    for (const a of Object.values(data.appearances)) {
+      if (a.teamId !== tid) continue;
+      const m = data.matches[a.eventId];
+      if (!m || !imported(m)) continue;
+      const r = matchRound(m);
+      if (r == null) continue;
+      const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+      const eff = { ...a };
+      if (adj) {
+        if (typeof adj.assists === "number") eff.assists = Math.max(0, (eff.assists || 0) + adj.assists);
+        if (typeof adj.secondYellow === "boolean") eff.secondYellow = adj.secondYellow;
+        if (typeof adj.red === "boolean") eff.red = adj.red;
+      }
+      let v = 0;
+      if (stat === "assists") v = eff.assists || 0;
+      else if (stat === "yellows") v = (eff.yellow || 0) + (eff.secondYellow ? 1 : 0); // the second yellow is a yellow too
+      else if (stat === "reds") v = (eff.red ? 1 : 0) + (eff.secondYellow ? 1 : 0);    // dismissals
+      else if (stat === "fantasy") {
+        const p = data.players[a.playerId];
+        if (p?.gamePosition) v = scoreAppearance(a, m, p.gamePosition, adj).total;
+      }
+      byRound.set(r, (byRound.get(r) || 0) + v);
+    }
+  }
+  return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));
+}

@@ -4,7 +4,7 @@ import {
   emptyData, applyImport, setPlayerField, setAdjustment, setMatchRound, upsertMatchStubs,
 } from "../src/lib/store.js";
 // NOTE: import only what exists so far — Tasks 3-5 each add their function here.
-import { importedRounds, accumulate, playerWeeklySeries } from "../src/lib/series.js";
+import { importedRounds, accumulate, playerWeeklySeries, teamWeeklySeries } from "../src/lib/series.js";
 
 const NOW = 1765000000000;
 
@@ -104,5 +104,34 @@ describe("playerWeeklySeries", () => {
   it("is all null for a player with no game position", () => {
     const d = setPlayerField(fixture(), 10, "gamePosition", null);
     expect(values(playerWeeklySeries(d, 10))).toEqual([null, null, null, null]);
+  });
+});
+
+describe("teamWeeklySeries", () => {
+  const d = fixture();
+  it("league points per round (W=3 D=1 L=0), gap when not playing", () => {
+    expect(values(teamWeeklySeries(d, 1, "points"))).toEqual([3, 1, null, 3]);
+    expect(values(teamWeeklySeries(d, 2, "points"))).toEqual([0, 1, null, 0]);
+  });
+  it("fantasy points sum the team's players", () => {
+    expect(values(teamWeeklySeries(d, 1, "fantasy"))).toEqual([9, 3, null, 0]);
+    expect(values(teamWeeklySeries(d, 2, "fantasy"))).toEqual([3, 6, null, -1]);
+  });
+  it("yellows count the second yellow as a yellow too (leagueTable convention)", () => {
+    expect(values(teamWeeklySeries(d, 2, "yellows"))).toEqual([0, 1, null, 2]);
+  });
+  it("reds count dismissals (straight red or second yellow)", () => {
+    expect(values(teamWeeklySeries(d, 2, "reds"))).toEqual([0, 0, null, 1]);
+  });
+  it("assists", () => {
+    expect(values(teamWeeklySeries(d, 2, "assists"))).toEqual([0, 1, null, 0]);
+  });
+  it("applies adjustments like leagueTable does", () => {
+    const adj = setAdjustment(d, "101:20", { assists: 1 });
+    expect(values(teamWeeklySeries(adj, 2, "assists"))).toEqual([0, 2, null, 0]);
+  });
+  it("respects roundOverride", () => {
+    const moved = setMatchRound(d, 102, 3);
+    expect(values(teamWeeklySeries(moved, 1, "points"))).toEqual([3, 1, 3]);
   });
 });
