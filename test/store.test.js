@@ -11,6 +11,7 @@ import {
   teamWindowEventIds, leagueTable,
   hotEventIds,
   playerClimb,
+  teamSitePoints,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -693,5 +694,23 @@ describe("playerClimb", () => {
     const d = climbFixture();
     expect(playerClimb(d, 60, { windowIds: new Set() })).toBeNull();
     expect(playerClimb(d, 60, {})).toBeNull();
+  });
+});
+
+describe("pens + site totals", () => {
+  it("playerTotals aggregates penalties scored, adjustment-aware", () => {
+    let d = importedFixture();
+    d.appearances["100:10"].penScored = 1;
+    expect(playerTotals(d, 10).pens).toBe(1);
+    d = setAdjustment(d, "100:10", { penScored: 1 });
+    expect(playerTotals(d, 10).pens).toBe(2);
+  });
+  it("playerTotals pens is 0 when nothing scored", () => {
+    expect(playerTotals(importedFixture(), 10).pens).toBe(0);
+  });
+  it("teamSitePoints sums per team and counts coverage", () => {
+    let d = importedFixture(); // players 10 and 11, both team 1
+    d = applyPasteResults(d, [{ playerId: 10, name: "A Keena", value: 25, price: 4.0 }], "price", NOW);
+    expect(teamSitePoints(d).get(1)).toEqual({ site: 25, withData: 1, missing: 1 });
   });
 });

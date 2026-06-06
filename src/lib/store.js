@@ -150,13 +150,17 @@ export function playerTotals(data, playerId, opts = {}) {
   const position = opts.position ?? player?.gamePosition;
   let apps = opts.apps ?? playerAppearances(data, playerId);
   if (opts.eventIds) apps = apps.filter((a) => opts.eventIds.has(a.eventId));
-  const t = { minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: position ? 0 : null };
+  const t = { minutes: 0, goals: 0, assists: 0, pens: 0, starts: 0, subApps: 0, points: position ? 0 : null };
   for (const a of apps) {
     const key = `${a.eventId}:${a.playerId}`;
     const adj = data.adjustments[key] || null;
     const eff = { ...a };
-    if (adj) for (const f of ["goals", "assists", "minutes"]) if (typeof adj[f] === "number") eff[f] += adj[f];
-    t.minutes += eff.minutes; t.goals += eff.goals; t.assists += eff.assists;
+    if (adj) {
+      for (const f of ["goals", "assists", "minutes"]) if (typeof adj[f] === "number") eff[f] += adj[f];
+      // pre-penScored appearances lack the field — clamp like leagueTable does
+      if (typeof adj.penScored === "number") eff.penScored = Math.max(0, (eff.penScored || 0) + adj.penScored);
+    }
+    t.minutes += eff.minutes; t.goals += eff.goals; t.assists += eff.assists; t.pens += eff.penScored || 0;
     a.started ? t.starts++ : t.subApps++;
     if (t.points !== null) {
       const match = data.matches[a.eventId];
@@ -398,6 +402,19 @@ export function teamWindowEventIds(data, n) {
   for (const [tid, ms] of byTeam) {
     ms.sort((a, b) => a.kickoff - b.kickoff);
     out.set(tid, new Set(ms.slice(-n).map((m) => m.eventId)));
+  }
+  return out;
+}
+
+// teamId -> { site, withData, missing }: sum of the team's players' official
+// fantasy-site totals plus paste coverage, for the Table tab's FPts cross-check.
+export function teamSitePoints(data) {
+  const out = new Map();
+  for (const p of Object.values(data.players)) {
+    const t = out.get(p.teamId) || { site: 0, withData: 0, missing: 0 };
+    if (p.sitePoints != null) { t.site += p.sitePoints; t.withData++; }
+    else t.missing++;
+    out.set(p.teamId, t);
   }
   return out;
 }
