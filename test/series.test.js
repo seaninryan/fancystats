@@ -150,3 +150,30 @@ describe("chartRows", () => {
     expect(chartRows([])).toEqual([]);
   });
 });
+
+describe("playerWeeklySeries stats", () => {
+  it("goals", () => {
+    expect(values(playerWeeklySeries(fixture(), 10, "goals"))).toEqual([1, 0, null, 0]);
+  });
+  it("assists", () => {
+    expect(values(playerWeeklySeries(fixture(), 20, "assists"))).toEqual([0, 1, null, 0]);
+  });
+  it("yellows count the second yellow as a yellow too", () => {
+    expect(values(playerWeeklySeries(fixture(), 20, "yellows"))).toEqual([0, 1, null, 2]);
+  });
+  it("reds count dismissals", () => {
+    expect(values(playerWeeklySeries(fixture(), 20, "reds"))).toEqual([0, 0, null, 1]);
+  });
+  it("goal adjustments apply", () => {
+    const d = setAdjustment(fixture(), "100:10", { goals: 1 });
+    expect(values(playerWeeklySeries(d, 10, "goals"))).toEqual([2, 0, null, 0]);
+  });
+  it("count stats work for positionless players (only fantasy needs a position)", () => {
+    const d = setPlayerField(fixture(), 10, "gamePosition", null);
+    expect(values(playerWeeklySeries(d, 10, "goals"))).toEqual([1, 0, null, 0]);
+    expect(values(playerWeeklySeries(d, 10))).toEqual([null, null, null, null]);
+  });
+  it("defaults to fantasy", () => {
+    expect(values(playerWeeklySeries(fixture(), 10))).toEqual([9, 3, null, 0]);
+  });
+});

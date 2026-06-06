@@ -29,15 +29,41 @@ export function accumulate(points) {
     ({ round, value: value == null ? null : (sum += value) }));
 }
 
-// Fantasy points per gameweek for one player. null = the player's team had no
-// imported match that round (gap); 0 = team played but the player didn't score
-// (or didn't appear). No gamePosition -> no computable points -> all null,
-// matching the Pts column's ❗.
-export function playerWeeklySeries(data, playerId) {
+// Stat selector for the Players tab graph: [key, button label].
+export const PLAYER_STATS = [
+  ["fantasy", "FPts"], ["goals", "G"], ["assists", "Ast"], ["yellows", "Yel"], ["reds", "Red"],
+];
+
+// One appearance's contribution to a stat. Count-stat conventions mirror
+// leagueTable so graphs agree with the table columns at both levels.
+function appearanceStat(a, m, position, adj, stat) {
+  if (stat === "fantasy") return scoreAppearance(a, m, position, adj).total;
+  const eff = { ...a };
+  if (adj) {
+    for (const f of ["goals", "assists"]) {
+      if (typeof adj[f] === "number") eff[f] = Math.max(0, (eff[f] || 0) + adj[f]);
+    }
+    if (typeof adj.secondYellow === "boolean") eff.secondYellow = adj.secondYellow;
+    if (typeof adj.red === "boolean") eff.red = adj.red;
+  }
+  if (stat === "goals") return eff.goals || 0;
+  if (stat === "assists") return eff.assists || 0;
+  if (stat === "yellows") return (eff.yellow || 0) + (eff.secondYellow ? 1 : 0); // the second yellow is a yellow too
+  return (eff.red ? 1 : 0) + (eff.secondYellow ? 1 : 0); // reds: dismissals
+}
+
+// One player's per-gameweek value. stat: "fantasy" | "goals" | "assists" |
+// "yellows" | "reds". null = the player's team had no imported match that
+// round (gap); 0 = team played but the player contributed nothing (or didn't
+// appear). Fantasy needs a gamePosition to score (matching the Pts column's
+// ❗); the count stats don't.
+export function playerWeeklySeries(data, playerId, stat = "fantasy") {
   const rounds = importedRounds(data);
   const player = data.players[playerId];
   const position = player?.gamePosition;
-  if (!position) return rounds.map((round) => ({ round, value: null }));
+  if (!player || (stat === "fantasy" && !position)) {
+    return rounds.map((round) => ({ round, value: null }));
+  }
   const byRound = new Map();
   for (const m of Object.values(data.matches)) {
     if (!imported(m) || (m.homeTeamId !== player.teamId && m.awayTeamId !== player.teamId)) continue;
@@ -51,7 +77,7 @@ export function playerWeeklySeries(data, playerId) {
     const r = matchRound(m);
     if (r == null) continue;
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    byRound.set(r, (byRound.get(r) || 0) + scoreAppearance(a, m, position, adj).total);
+    byRound.set(r, (byRound.get(r) || 0) + appearanceStat(a, m, position, adj, stat));
   }
   return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));
 }
