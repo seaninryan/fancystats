@@ -177,3 +177,22 @@ describe("playerWeeklySeries stats", () => {
     expect(values(playerWeeklySeries(fixture(), 10))).toEqual([9, 3, null, 0]);
   });
 });
+
+describe("teamWeeklySeries result stats", () => {
+  const d = fixture();
+  it("played", () => {
+    expect(values(teamWeeklySeries(d, 1, "played"))).toEqual([1, 1, null, 1]);
+    expect(values(teamWeeklySeries(d, 2, "played"))).toEqual([1, 1, null, 1]);
+  });
+  it("won / drawn / lost", () => {
+    expect(values(teamWeeklySeries(d, 1, "won"))).toEqual([1, 0, null, 1]);
+    expect(values(teamWeeklySeries(d, 1, "drawn"))).toEqual([0, 1, null, 0]);
+    expect(values(teamWeeklySeries(d, 2, "lost"))).toEqual([1, 0, null, 1]);
+  });
+  it("goals for / against", () => {
+    expect(values(teamWeeklySeries(d, 1, "gf"))).toEqual([1, 2, null, 3]);
+    expect(values(teamWeeklySeries(d, 1, "ga"))).toEqual([0, 2, null, 0]);
+    expect(values(teamWeeklySeries(d, 2, "gf"))).toEqual([0, 2, null, 0]);
+    expect(values(teamWeeklySeries(d, 2, "ga"))).toEqual([1, 2, null, 3]);
+  });
+});
