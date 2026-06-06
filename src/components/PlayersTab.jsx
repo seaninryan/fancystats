@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
+import { playerWeeklySeries } from "../lib/series.js";
+import GameweekChart from "./GameweekChart.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 const COLS = [
@@ -24,6 +26,13 @@ export default function PlayersTab({ data, update, openPlayer }) {
   const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, hot: false, q: "" });
   const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "points", dir: -1 });
+  const [selected, setSelected] = useState(() => new Set()); // player ids for the graph
+  const [cumulative, setCumulative] = useState(false);
+  const toggleSelected = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const rows = useMemo(() => {
     const index = appearancesByPlayer(data); // one pass instead of N full scans
@@ -45,6 +54,16 @@ export default function PlayersTab({ data, update, openPlayer }) {
     });
   }, [data, win]);
 
+  const chartSeries = useMemo(() => [...selected].flatMap((id) => {
+    const p = data.players[id];
+    if (!p) return [];
+    return [{
+      key: String(id), label: playerName(p),
+      color: teamColor(data.teams[p.teamId]).bg,
+      points: playerWeeklySeries(data, id),
+    }];
+  }), [data, selected]);
+
   const shown = rows
     .filter((r) =>
       (filters.team === "all" || String(r.teamId) === filters.team) &&
@@ -64,6 +83,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
 
   return (
     <div>
+      <GameweekChart series={chartSeries} cumulative={cumulative}
+        onToggleCumulative={() => setCumulative((c) => !c)}
+        onClear={() => setSelected(new Set())} />
       <div className="row" style={{ margin: "8px 0" }}>
         <select value={filters.team} onChange={(e) => setFilters({ ...filters, team: e.target.value })}>
           <option value="all">All teams</option>
@@ -99,8 +121,11 @@ export default function PlayersTab({ data, update, openPlayer }) {
           </tr></thead>
           <tbody>
             {shown.map((r) => (
-              <tr key={r.id} onClick={() => openPlayer(r.id)} style={{ cursor: "pointer" }}>
-                <td>{r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
+              <tr key={r.id} onClick={() => toggleSelected(r.id)}
+                className={selected.has(r.id) ? "selected" : ""} style={{ cursor: "pointer" }}>
+                <td className="cell-click" title="open player details"
+                  onClick={(e) => { e.stopPropagation(); openPlayer(r.id); }}>
+                  {r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
