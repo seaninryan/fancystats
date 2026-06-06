@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds } from "../lib/store.js";
+import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds, playerClimb } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
 import { playerWeeklySeries, PLAYER_STATS } from "../lib/series.js";
@@ -50,6 +50,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
         price: p.price, starred: p.starred, inSquad: p.inSquad,
         mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
+        climb: windows ? playerClimb(data, id, { apps, windowIds: windows.get(p.teamId) || new Set() }) : null,
         ...playerTotals(data, id, { apps, eventIds: windows ? windows.get(p.teamId) || new Set() : undefined }),
       };
     });
@@ -64,6 +65,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
       points: playerWeeklySeries(data, id, stat),
     }];
   }), [data, selected, stat]);
+
+  // ± only means something relative to a window
+  const cols = win === "all" ? COLS : [...COLS.slice(0, 5), ["climb", "±"], ...COLS.slice(5)];
 
   const shown = rows
     .filter((r) =>
@@ -109,7 +113,8 @@ export default function PlayersTab({ data, update, openPlayer }) {
         <button className={filters.hot ? "primary" : ""} title="in form: 8+ pts in 2 of the last 3"
           onClick={() => setFilters({ ...filters, hot: !filters.hot })}>🔥</button>
         {["all", 3, 5].map((w) => (
-          <button key={w} className={win === w ? "primary" : ""} onClick={() => setWin(w)}>
+          <button key={w} className={win === w ? "primary" : ""}
+            onClick={() => { setWin(w); if (w === "all" && sort.key === "climb") setSort({ key: "points", dir: -1 }); }}>
             {w === "all" ? "All" : `Last ${w}`}
           </button>
         ))}
@@ -118,7 +123,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
       <div className="scroll-x">
         <table className="sticky-col">
           <thead><tr>
-            {COLS.map(([key, label]) => (
+            {cols.map(([key, label]) => (
               <th key={key} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
                 {label}{sort.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
               </th>
@@ -135,6 +140,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
                 <td className={r.err ? "err-cell" : ""} title={r.err ? "No fantasy data — set a position or add their fantasy alias in the player view" : ""}>{r.err ? "❗" : r.points ?? "—"}</td>
+                {win !== "all" && (
+                  <td>{r.climb == null ? "—" : <span className={r.climb >= 0 ? "gain" : "loss"}>{(r.climb >= 0 ? "+" : "") + r.climb.toFixed(1)}</span>}</td>
+                )}
                 <td>{r.goals}</td><td>{r.assists}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
             ))}
