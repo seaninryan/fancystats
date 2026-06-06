@@ -9,6 +9,7 @@ import {
   isHot, allMatchTeamPoints,
   setAbsence, getAbsence, playerOutNow,
   teamWindowEventIds, leagueTable,
+  hotEventIds,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -547,5 +548,60 @@ describe("leagueTable", () => {
   it("respects the window (team's last N imported matches)", () => {
     const t1 = leagueTable(withSecondMatch(), 1).find((r) => r.teamId === 1);
     expect(t1).toMatchObject({ played: 1, gf: 2, ga: 2, points: 1 }); // only match 101
+  });
+});
+
+describe("hotEventIds", () => {
+  const appOf = (eventId, over = {}) => ({
+    eventId, playerId: 50, teamId: 7, started: true, subOnMin: null, subOffMin: null,
+    minutes: 90, positionPlayed: "F", goals: 0, assists: 0, ownGoals: 0,
+    yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0, ...over,
+  });
+  const matchOf = (eventId, round, kickoff, homeScore, awayScore, goalTimes) => ({
+    eventId, round, kickoff, status: "finished", homeTeamId: 7, awayTeamId: 8,
+    homeScore, awayScore, goalTimes, partial: false,
+  });
+  function hotFixture() {
+    let d = emptyData();
+    const imports = [
+      { match: matchOf(301, 1, NOW + 1000, 2, 0, { home: [10, 20], away: [] }),
+        appearances: [appOf(301, { goals: 1 })] },
+      { match: matchOf(302, 2, NOW + 2000, 1, 1, { home: [30], away: [60] }),
+        appearances: [appOf(302, { goals: 1 })] },
+      { match: matchOf(303, 3, NOW + 3000, 0, 1, { home: [], away: [70] }),
+        appearances: [appOf(303)] },
+      { match: matchOf(304, 4, NOW + 4000, 0, 0, { home: [], away: [] }),
+        appearances: [] },
+    ];
+    for (const imp of imports) {
+      d = applyImport(d, {
+        ...imp,
+        teams: [{ id: 7, name: "Hot FC", shortName: "HOT" }, { id: 8, name: "Cold FC", shortName: "COL" }],
+        players: [{ id: 50, name: "S Treak", teamId: 7 }],
+      }, NOW);
+    }
+    return setPlayerField(d, 50, "gamePosition", "FWD");
+  }
+  it("flags matches after which the trailing window satisfies the hot rule", () => {
+    expect([...hotEventIds(hotFixture(), 50)].sort()).toEqual([302, 303]);
+  });
+  it("exactly 8 points counts (>= threshold)", () => {
+    // M302 scores exactly 8 and is one of the two qualifying games for both flames
+    expect(hotEventIds(hotFixture(), 50).has(302)).toBe(true);
+  });
+  it("sitting out consumes a window slot", () => {
+    // after M304 the window is [8, 3, absent] -> only one qualifying game
+    expect(hotEventIds(hotFixture(), 50).has(304)).toBe(false);
+  });
+  it("needs at least two team matches in the window", () => {
+    expect(hotEventIds(hotFixture(), 50).has(301)).toBe(false);
+  });
+  it("is empty for positionless players", () => {
+    const d = setPlayerField(hotFixture(), 50, "gamePosition", null);
+    expect(hotEventIds(d, 50).size).toBe(0);
+  });
+  it("agrees with isHot on the latest match", () => {
+    const d = hotFixture();
+    expect(isHot(d, 50)).toBe(hotEventIds(d, 50).has(304));
   });
 });

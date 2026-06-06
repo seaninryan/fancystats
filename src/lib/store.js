@@ -334,27 +334,46 @@ const HOT_THRESHOLD = 8;
 const HOT_WINDOW = 3;
 const HOT_NEEDED = 2;
 
+// Imported team matches in kickoff order — the spine of the hot windows.
+function teamImportedMatches(data, teamId) {
+  return Object.values(data.matches)
+    .filter((m) => m.importedAt && m.goalTimes && (m.homeTeamId === teamId || m.awayTeamId === teamId))
+    .sort((a, b) => a.kickoff - b.kickoff);
+}
+
+// EventIds of team matches AFTER which the player was hot: the trailing
+// HOT_WINDOW team matches (ending at that match) include >= HOT_NEEDED games
+// of >= HOT_THRESHOLD points. Missing a game consumes a slot. Single source
+// of the hot rule — isHot is "hot after the latest match".
+export function hotEventIds(data, playerId, appsArg = null) {
+  const out = new Set();
+  const player = data.players[playerId];
+  if (!player?.gamePosition) return out;
+  const teamMatches = teamImportedMatches(data, player.teamId);
+  const apps = appsArg ?? playerAppearances(data, playerId);
+  const byEvent = new Map(apps.map((a) => [a.eventId, a]));
+  const scores = teamMatches.map((m) => {
+    const a = byEvent.get(m.eventId);
+    if (!a) return null; // didn't play that one — consumes a slot
+    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
+    return scoreAppearance(a, m, player.gamePosition, adj).total;
+  });
+  for (let i = 0; i < teamMatches.length; i++) {
+    const from = Math.max(0, i - HOT_WINDOW + 1);
+    if (i - from + 1 < HOT_NEEDED) continue; // not enough matches yet
+    let good = 0;
+    for (let j = from; j <= i; j++) if (scores[j] != null && scores[j] >= HOT_THRESHOLD) good++;
+    if (good >= HOT_NEEDED) out.add(teamMatches[i].eventId);
+  }
+  return out;
+}
+
 export function isHot(data, playerId, appsArg = null) {
   const player = data.players[playerId];
   if (!player?.gamePosition) return false;
-  // Window = the player's CURRENT team's last HOT_WINDOW imported matches (same on
-  // every page). Missing one of those games consumes a slot — sitting out cools you
-  // off — but a blank week for the whole team doesn't.
-  const teamMatches = Object.values(data.matches)
-    .filter((m) => m.importedAt && m.goalTimes && (m.homeTeamId === player.teamId || m.awayTeamId === player.teamId))
-    .sort((a, b) => a.kickoff - b.kickoff)
-    .slice(-HOT_WINDOW);
-  if (teamMatches.length < HOT_NEEDED) return false;
-  const apps = appsArg ?? playerAppearances(data, playerId);
-  const byEvent = new Map(apps.map((a) => [a.eventId, a]));
-  let good = 0;
-  for (const m of teamMatches) {
-    const a = byEvent.get(m.eventId);
-    if (!a) continue; // didn't play that one
-    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    if (scoreAppearance(a, m, player.gamePosition, adj).total >= HOT_THRESHOLD) good++;
-  }
-  return good >= HOT_NEEDED;
+  const teamMatches = teamImportedMatches(data, player.teamId);
+  if (!teamMatches.length) return false;
+  return hotEventIds(data, playerId, appsArg).has(teamMatches[teamMatches.length - 1].eventId);
 }
 
 // teamId -> Set of the team's last N imported match eventIds (the same window
