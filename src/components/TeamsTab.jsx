@@ -42,7 +42,10 @@ function cellFor(app0, adj) {
 
 const fmtD = (ts) => new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
 
-const TOTAL_COLS = [["minutes", "Min"], ["goals", "G"], ["assists", "A"], ["points", "Pts"]];
+const TOTAL_COLS = [
+  ["minutes", "Min", "minutes in the selected window"], ["goals", "G", "goals in the selected window"],
+  ["assists", "A", "assists in the selected window"], ["points", "Pts", "fantasy points in the selected window"],
+];
 
 function AbsenceBar({ ctx, existing, defaultNote, onSave, onClear, onClose }) {
   const [note, setNote] = useState(existing?.note ?? defaultNote);
@@ -188,10 +191,10 @@ export default function TeamsTab({ data, update, openPlayer }) {
         <div className="scroll-x scroll-xy" ref={wrapRef}>
           <table className="sticky-col freeze-stats">
             <thead><tr>
-              <th onClick={() => setSort({ key: "apps", dir: -1 })}>Player</th>
-              <th>Pos</th>
-              {TOTAL_COLS.map(([key, label]) => (
-                <th key={key} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
+              <th onClick={() => setSort({ key: "apps", dir: -1 })} title="click to sort by appearances">Player</th>
+              <th title="fantasy game position">Pos</th>
+              {TOTAL_COLS.map(([key, label, tip]) => (
+                <th key={key} title={tip} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
                   {label}{sort.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
                 </th>
               ))}

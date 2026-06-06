@@ -6,9 +6,14 @@ import GameweekChart from "./GameweekChart.jsx";
 import { TeamPill } from "./Pills.jsx";
 
 const COLS = [
-  ["played", "P"], ["won", "W"], ["drawn", "D"], ["lost", "L"],
-  ["gf", "GF"], ["ga", "GA"], ["gd", "GD"], ["points", "Pts"],
-  ["fantasy", "FPts"], ["yellows", "🟨"], ["reds", "🟥"], ["pensScored", "Pen"], ["assists", "👟"],
+  ["played", "P", "played"], ["won", "W", "won"], ["drawn", "D", "drawn"], ["lost", "L", "lost"],
+  ["gf", "GF", "goals for"], ["ga", "GA", "goals against"], ["gd", "GD", "goal difference"],
+  ["points", "Pts", "league points"],
+  ["fantasy", "FPts", "fantasy points scored by the team's players"],
+  ["yellows", "🟨", "yellow cards (a second yellow counts too)"],
+  ["reds", "🟥", "dismissals (straight red or second yellow)"],
+  ["pensScored", "Pen", "penalties scored (missed shown in row tooltip)"],
+  ["assists", "👟", "assists"],
 ];
 
 export default function TableTab({ data }) {
@@ -60,10 +65,9 @@ export default function TableTab({ data }) {
         <div className="scroll-x">
           <table className="sticky-col">
             <thead><tr>
-              <th onClick={() => setSort(null)}>#&nbsp;&nbsp;Team</th>
-              {COLS.map(([key, label]) => (
-                <th key={key} onClick={() => setSort((s) => ({ key, dir: s?.key === key ? -s.dir : -1 }))}
-                  title={key === "pensScored" ? "penalties scored (missed shown in row tooltip)" : ""}>
+              <th onClick={() => setSort(null)} title="click to restore league order · row or 📈 adds to the graph">#&nbsp;&nbsp;Team</th>
+              {COLS.map(([key, label, tip]) => (
+                <th key={key} title={tip} onClick={() => setSort((s) => ({ key, dir: s?.key === key ? -s.dir : -1 }))}>
                   {label}{sort?.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
                 </th>
               ))}
@@ -72,7 +76,11 @@ export default function TableTab({ data }) {
               {rows.map((r, i) => (
                 <tr key={r.teamId} onClick={() => toggleSelected(r.teamId)}
                   className={selected.has(r.teamId) ? "selected" : ""} style={{ cursor: "pointer" }}>
-                  <td>{i + 1} <TeamPill team={data.teams[r.teamId]} /></td>
+                  <td>
+                    <button className={`mini-toggle ${selected.has(r.teamId) ? "" : "off"}`} aria-pressed={selected.has(r.teamId)}
+                      title="add to graph" onClick={(e) => { e.stopPropagation(); toggleSelected(r.teamId); }}>📈</button>
+                    {" "}{i + 1} <TeamPill team={data.teams[r.teamId]} />
+                  </td>
                   {COLS.map(([key]) => (
                     <td key={key} title={key === "pensScored" && r.pensMissed ? `${r.pensMissed} missed` : ""}>
                       {r[key]}

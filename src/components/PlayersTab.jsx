@@ -7,8 +7,13 @@ import GameweekChart from "./GameweekChart.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 const COLS = [
-  ["name", "Player"], ["teamName", "Team"], ["pos", "Pos"], ["price", "€"], ["points", "Pts"],
-  ["goals", "G"], ["assists", "A"], ["minutes", "Min"], ["starts", "St"], ["subApps", "Sub"],
+  ["name", "Player", "click name for details · row or 📈 adds to the graph"],
+  ["teamName", "Team", "club"],
+  ["pos", "Pos", "fantasy game position (▲▼ = differs from where they really play)"],
+  ["price", "€", "price on the fantasy site"],
+  ["points", "Pts", "fantasy points in the selected window"],
+  ["goals", "G", "goals"], ["assists", "A", "assists"], ["minutes", "Min", "minutes played"],
+  ["starts", "St", "matches started"], ["subApps", "Sub", "appearances as a substitute"],
 ];
 
 function MismatchMark({ mi }) {
@@ -67,7 +72,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
   }), [data, selected, stat]);
 
   // ± only means something relative to a window
-  const cols = win === "all" ? COLS : [...COLS.slice(0, 5), ["climb", "±"], ...COLS.slice(5)];
+  const cols = win === "all" ? COLS : [...COLS.slice(0, 5), ["climb", "±", "form vs baseline: points per team match in the window minus before it"], ...COLS.slice(5)];
 
   const shown = rows
     .filter((r) =>
@@ -123,8 +128,8 @@ export default function PlayersTab({ data, update, openPlayer }) {
       <div className="scroll-x">
         <table className="sticky-col">
           <thead><tr>
-            {cols.map(([key, label]) => (
-              <th key={key} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
+            {cols.map(([key, label, tip]) => (
+              <th key={key} title={tip} onClick={() => setSort((s) => ({ key, dir: s.key === key ? -s.dir : -1 }))}>
                 {label}{sort.key === key ? (sort.dir < 0 ? " ↓" : " ↑") : ""}
               </th>
             ))}
@@ -135,7 +140,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 className={selected.has(r.id) ? "selected" : ""} style={{ cursor: "pointer" }}>
                 <td className="cell-click" title="open player details"
                   onClick={(e) => { e.stopPropagation(); openPlayer(r.id); }}>
-                  {r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}{r.name}</td>
+                  <button className={`mini-toggle ${selected.has(r.id) ? "" : "off"}`} aria-pressed={selected.has(r.id)}
+                    title="add to graph" onClick={(e) => { e.stopPropagation(); toggleSelected(r.id); }}>📈</button>
+                  {" "}{r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}<span style={{ textDecoration: "underline dotted" }}>{r.name}</span></td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>
