@@ -35,6 +35,8 @@ export default function PlayersTab({ data, update, openPlayer }) {
   const [selected, setSelected] = useState(() => new Set()); // player ids for the graph
   const [cumulative, setCumulative] = useState(false);
   const [stat, setStat] = useState("fantasy");
+  const [cap, setCap] = useState(""); // budget for the selected basket (€); "" = no cap
+  const [maxPrice, setMaxPrice] = useState(""); // table price filter (€ ≤); "" = off
   const toggleSelected = (id) => setSelected((prev) => {
     const next = new Set(prev);
     next.has(id) ? next.delete(id) : next.add(id);
@@ -79,6 +81,20 @@ export default function PlayersTab({ data, update, openPlayer }) {
     }];
   }), [data, selected, stat]);
 
+  // the 📈 selection doubles as a budgeting basket
+  const basket = useMemo(() => {
+    let cost = 0, unpriced = 0;
+    for (const id of selected) {
+      const p = data.players[id];
+      if (!p) continue;
+      if (p.price != null) cost += p.price;
+      else unpriced++;
+    }
+    return { cost, unpriced };
+  }, [data, selected]);
+  const capNum = parseFloat(cap) || null;
+  const overCap = capNum != null && basket.cost > capNum;
+
   // ± only means something relative to a window
   const cols = win === "all" ? COLS : [...COLS.slice(0, 5), ["climb", "±", "form vs baseline: points per team match in the window minus before it"], ...COLS.slice(5)];
 
@@ -90,6 +106,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
       (!filters.inSquad || r.inSquad) &&
       (!filters.mismatch || r.mi) &&
       (!filters.hot || r.hot) &&
+      (!maxPrice || (r.price != null && r.price <= parseFloat(maxPrice))) &&
       (!filters.q || r.name.toLowerCase().includes(filters.q.toLowerCase())))
     .sort((a, b) => {
       const av = a[sort.key], bv = b[sort.key];
@@ -107,6 +124,14 @@ export default function PlayersTab({ data, update, openPlayer }) {
         {PLAYER_STATS.map(([key, label]) => (
           <button key={key} className={stat === key ? "primary" : ""} onClick={() => setStat(key)}>{label}</button>
         ))}
+        <span className={overCap ? "loss" : ""} style={{ fontWeight: 600 }}
+          title={`${selected.size} selected${basket.unpriced ? ` · ${basket.unpriced} without a price (not counted)` : ""}${overCap ? ` · over by €${(basket.cost - capNum).toFixed(1)}` : ""}`}>
+          Σ €{basket.cost.toFixed(1)}{capNum ? ` / €${capNum.toFixed(1)}` : ""}
+        </span>
+        <label className="dim" title="budget cap for the selected players">cap €{" "}
+          <input type="number" step="0.5" min="0" value={cap}
+            onChange={(e) => setCap(e.target.value)} style={{ width: 70 }} />
+        </label>
       </GameweekChart>
       <div className="row" style={{ margin: "8px 0" }}>
         <select value={filters.team} onChange={(e) => setFilters({ ...filters, team: e.target.value })}>
@@ -125,6 +150,10 @@ export default function PlayersTab({ data, update, openPlayer }) {
           onClick={() => setFilters({ ...filters, mismatch: !filters.mismatch })}>▲▼</button>
         <button className={filters.hot ? "primary" : ""} title="in form: 8+ pts in 2 of the last 3"
           onClick={() => setFilters({ ...filters, hot: !filters.hot })}>🔥</button>
+        <label className="dim" title="only players priced at or below (hides unpriced players)">€ ≤{" "}
+          <input type="number" step="0.5" min="0" value={maxPrice}
+            onChange={(e) => setMaxPrice(e.target.value)} style={{ width: 70 }} />
+        </label>
         {["all", 3, 5].map((w) => (
           <button key={w} className={win === w ? "primary" : ""}
             onClick={() => { setWin(w); if (w === "all" && sort.key === "climb") setSort({ key: "points", dir: -1 }); }}>
