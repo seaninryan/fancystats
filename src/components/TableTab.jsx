@@ -1,5 +1,8 @@
 import { useMemo, useState } from "react";
 import { leagueTable } from "../lib/store.js";
+import { teamWeeklySeries, TEAM_STATS } from "../lib/series.js";
+import { teamColor } from "../lib/teamColors.js";
+import GameweekChart from "./GameweekChart.jsx";
 import { TeamPill } from "./Pills.jsx";
 
 const COLS = [
@@ -11,6 +14,14 @@ const COLS = [
 export default function TableTab({ data }) {
   const [win, setWin] = useState("all");
   const [sort, setSort] = useState(null); // null = league order from leagueTable
+  const [selected, setSelected] = useState(() => new Set()); // team ids for the graph
+  const [stat, setStat] = useState("points");
+  const [cumulative, setCumulative] = useState(true); // season progress by default
+  const toggleSelected = (id) => setSelected((prev) => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
   const rows = useMemo(() => {
     const t = leagueTable(data, win === "all" ? null : win).map((r) => ({ ...r, gd: r.gf - r.ga }));
@@ -18,8 +29,25 @@ export default function TableTab({ data }) {
     return t;
   }, [data, win, sort]);
 
+  const chartSeries = useMemo(() => [...selected].flatMap((tid) => {
+    const team = data.teams[tid];
+    if (!team) return [];
+    return [{
+      key: String(tid), label: team.shortName || team.name,
+      color: teamColor(team).bg,
+      points: teamWeeklySeries(data, tid, stat),
+    }];
+  }), [data, selected, stat]);
+
   return (
     <div>
+      <GameweekChart series={chartSeries} cumulative={cumulative}
+        onToggleCumulative={() => setCumulative((c) => !c)}
+        onClear={() => setSelected(new Set())}>
+        {TEAM_STATS.map(([key, label]) => (
+          <button key={key} className={stat === key ? "primary" : ""} onClick={() => setStat(key)}>{label}</button>
+        ))}
+      </GameweekChart>
       <div className="row" style={{ margin: "8px 0" }}>
         {["all", 3, 5].map((w) => (
           <button key={w} className={win === w ? "primary" : ""} onClick={() => setWin(w)}>
@@ -42,7 +70,8 @@ export default function TableTab({ data }) {
             </tr></thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.teamId}>
+                <tr key={r.teamId} onClick={() => toggleSelected(r.teamId)}
+                  className={selected.has(r.teamId) ? "selected" : ""} style={{ cursor: "pointer" }}>
                   <td>{i + 1} <TeamPill team={data.teams[r.teamId]} /></td>
                   {COLS.map(([key]) => (
                     <td key={key} title={key === "pensScored" && r.pensMissed ? `${r.pensMissed} missed` : ""}>
