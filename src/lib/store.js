@@ -18,6 +18,7 @@ function defaultPlayer(p) {
     customName: null,
     gamePosition: null, gamePositionSource: null, realPosition: null,
     price: null, priceUpdatedAt: null,
+    sitePoints: null,
     starred: false, inSquad: false, pasteAlias: null, flags: [],
   };
 }
@@ -172,11 +173,17 @@ export function applyPasteResults(data, matched, kind, now) {
     const p = next.players[m.playerId];
     if (!p) continue;
     if (kind === "price") {
-      p.price = m.value;
+      p.price = m.price ?? m.value; // old pastes carry the price as the only number
       p.priceUpdatedAt = now;
     } else if (p.gamePositionSource !== "manual") {
       p.gamePosition = kind;
       p.gamePositionSource = "paste";
+    }
+    // two-column site rows (price + total) enrich any paste kind
+    if (m.price != null) {
+      p.price = m.price;
+      p.priceUpdatedAt = now;
+      p.sitePoints = m.value;
     }
     if (m.alias) p.pasteAlias = m.alias;
   }

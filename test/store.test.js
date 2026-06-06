@@ -613,6 +613,32 @@ describe("hotEventIds", () => {
   });
 });
 
+describe("applyPasteResults two-column rows", () => {
+  it("price paste sets price and sitePoints", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: 10, name: "A Keena", value: 25, price: 4.0 }], "price", NOW);
+    expect(d.players["10"].price).toBe(4.0);
+    expect(d.players["10"].sitePoints).toBe(25);
+  });
+  it("old single-number price paste still works and stores no sitePoints", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: 10, name: "A Keena", value: 10.5 }], "price", NOW);
+    expect(d.players["10"].price).toBe(10.5);
+    expect(d.players["10"].sitePoints ?? null).toBeNull();
+  });
+  it("position paste with a price enriches position, price and sitePoints", () => {
+    const d = applyPasteResults(importedFixture(), [{ playerId: 10, name: "A Keena", value: 25, price: 4.0 }], "GK", NOW);
+    expect(d.players["10"].gamePosition).toBe("GK");
+    expect(d.players["10"].price).toBe(4.0);
+    expect(d.players["10"].sitePoints).toBe(25);
+  });
+  it("manual position survives an enriched position paste; price still applies", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "FWD");
+    d = applyPasteResults(d, [{ playerId: 10, name: "A Keena", value: 25, price: 4.0 }], "GK", NOW);
+    expect(d.players["10"].gamePosition).toBe("FWD");
+    expect(d.players["10"].price).toBe(4.0);
+    expect(d.players["10"].sitePoints).toBe(25);
+  });
+});
+
 describe("playerClimb", () => {
   const appC = (eventId, playerId, over = {}) => ({
     eventId, playerId, teamId: 11, started: true, subOnMin: null, subOffMin: null,
