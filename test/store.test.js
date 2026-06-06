@@ -604,4 +604,10 @@ describe("hotEventIds", () => {
     const d = hotFixture();
     expect(isHot(d, 50)).toBe(hotEventIds(d, 50).has(304));
   });
+  it("adjustments can flip a flame", () => {
+    // +2 goals on M303 lifts it 3 -> 11: the window after M304 becomes [8, 11, absent]
+    const d = setAdjustment(hotFixture(), "303:50", { goals: 2 });
+    expect(hotEventIds(d, 50).has(304)).toBe(true);
+    expect(isHot(d, 50)).toBe(true); // and the row flame agrees
+  });
 });
