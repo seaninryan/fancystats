@@ -72,3 +72,25 @@ tr.selected td { background: #e9f3ee; }
   .gt-sm { display: none; }
   .lt-sm { display: inline; }
 }
+
+/* Teams grid: freeze the totals block (Player, Pos, Min, G, A, Pts) on desktop.
+   Fixed widths + cumulative left offsets — sticky columns need both. */
+.freeze-stats th:nth-child(-n+6), .freeze-stats td:nth-child(-n+6) {
+  position: sticky; background: var(--bg); z-index: 2;
+}
+.freeze-stats th:nth-child(-n+6) { z-index: 3; } /* header cells sit above body cells */
+.freeze-stats th:nth-child(1), .freeze-stats td:nth-child(1) { left: 0; width: 210px; }
+.freeze-stats th:nth-child(2), .freeze-stats td:nth-child(2) { left: 210px; width: 52px; }
+.freeze-stats th:nth-child(3), .freeze-stats td:nth-child(3) { left: 262px; width: 56px; }
+.freeze-stats th:nth-child(4), .freeze-stats td:nth-child(4) { left: 318px; width: 40px; }
+.freeze-stats th:nth-child(5), .freeze-stats td:nth-child(5) { left: 358px; width: 40px; }
+.freeze-stats th:nth-child(6), .freeze-stats td:nth-child(6) { left: 398px; width: 56px; }
+/* fixed-width name cell so long names ellipsize instead of breaking the offsets */
+.player-cell { display: flex; align-items: center; gap: 4px; width: 194px; }
+.player-cell a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+@media (max-width: 640px) {
+  /* not enough real estate — only the Player column stays frozen */
+  .freeze-stats th:nth-child(n+2):nth-child(-n+6),
+  .freeze-stats td:nth-child(n+2):nth-child(-n+6) { position: static; width: auto; }
+  .player-cell { width: auto; }
+}

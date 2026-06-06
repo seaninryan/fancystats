@@ -186,7 +186,7 @@ export default function TeamsTab({ data, update, openPlayer }) {
       })()}
       {matches.length === 0 ? <p className="dim">No imported matches for this team yet.</p> : (
         <div className="scroll-x scroll-xy" ref={wrapRef}>
-          <table className="sticky-col">
+          <table className="sticky-col freeze-stats">
             <thead><tr>
               <th onClick={() => setSort({ key: "apps", dir: -1 })}>Player</th>
               <th>Pos</th>
@@ -230,15 +230,18 @@ export default function TeamsTab({ data, update, openPlayer }) {
                 return (
                   <tr key={pid}>
                     <td>
-                      <button className={`mini-toggle ${p?.starred ? "" : "off"}`} aria-pressed={!!p?.starred} title="watchlist"
-                        onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
-                      <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
-                        onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                      {" "}{out ? <span title={out.note}>🚫 </span> : ""}{hot ? "🔥 " : ""}<a role="link" tabIndex={0} style={{ cursor: "pointer", textDecoration: "underline dotted" }}
-                        onClick={() => openPlayer(String(pid))}
-                        onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
-                        {playerName(p) || pid}
-                      </a>
+                      <span className="player-cell">
+                        <button className={`mini-toggle ${p?.starred ? "" : "off"}`} aria-pressed={!!p?.starred} title="watchlist"
+                          onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
+                        <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
+                          onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
+                        {out ? <span title={out.note}>🚫</span> : ""}{hot ? "🔥" : ""}<a role="link" tabIndex={0} title={playerName(p)}
+                          style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+                          onClick={() => openPlayer(String(pid))}
+                          onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
+                          {playerName(p) || pid}
+                        </a>
+                      </span>
                     </td>
                     <td><PosPill pos={p?.gamePosition} /></td>
                     <td>{t.minutes}</td><td>{t.goals}</td><td>{t.assists}</td>
