@@ -21,3 +21,25 @@ export function blobToFetcher(blob) {
     return { ok: true, status: 200, json: async () => hit };
   };
 }
+
+// Async: turn a pasted blob into the inputs the store mutators need. No dependency
+// on the current data object, so the result can be applied inside a pure updater.
+export async function decodeBlob(blob) {
+  const fetcher = blobToFetcher(blob);
+  const meta = { tournamentId: blob?.meta?.tournamentId, seasonId: blob?.meta?.seasonId };
+  const { stubs, teams } = await fetchSeasonEvents(meta, fetcher);
+  const results = [], failed = [];
+  for (const id of blob?.meta?.builtFor || []) {
+    try { results.push(await importMatch(id, fetcher)); }
+    catch (e) { failed.push({ id, error: e.message }); }
+  }
+  return { stubs, teams, results, failed };
+}
+
+// Pure: fold decoded pieces into the data object via the existing store mutators.
+export function applyDecoded(data, decoded, now) {
+  let next = upsertMatchStubs(data, decoded.stubs, decoded.teams);
+  next.meta = { ...next.meta, lastEventSync: now };
+  for (const r of decoded.results) next = applyImport(next, r, now);
+  return next;
+}
