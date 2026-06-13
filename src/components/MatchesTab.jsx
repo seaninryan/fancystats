@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
+import { matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
 import { TeamPill, PtsPill } from "./Pills.jsx";
 import ConsoleImport from "./ConsoleImport.jsx";
 

@@ -64,8 +64,7 @@ export default function ConsoleImport({ data, update }) {
       <textarea placeholder="Paste the snippet output here" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} style={{ width: "100%", fontFamily: "monospace" }} />
       <div className="row">
         <button className="primary" onClick={doImport} disabled={busy || !paste.trim()}>Import</button>
-        {busy && <span className="dim">{status}</span>}
-        {!busy && status && <span className="dim">{status}</span>}
+        {status && <span className="dim">{status}</span>}
         {data.meta.lastEventSync && <span className="dim">last sync {new Date(data.meta.lastEventSync).toLocaleDateString("en-IE")}</span>}
       </div>
       {error && <div className="banner err">{error}</div>}
