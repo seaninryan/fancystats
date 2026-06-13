@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { API } from "../src/lib/sofascore.js";
 import { blobToFetcher } from "../src/lib/consoleImport.js";
 import { decodeBlob, applyDecoded } from "../src/lib/consoleImport.js";
+import { buildImportSnippet } from "../src/lib/consoleImport.js";
 import { emptyData } from "../src/lib/store.js";
 import event from "./fixtures/event-ordinary.json";
 import lineups from "./fixtures/lineups-ordinary.json";
@@ -63,5 +64,23 @@ describe("decodeBlob + applyDecoded", () => {
     expect(decoded.results).toEqual([]);
     expect(decoded.failed).toHaveLength(1);
     expect(decoded.failed[0].id).toBe(555);
+  });
+});
+
+describe("buildImportSnippet", () => {
+  const snip = buildImportSnippet({ tournamentId: 192, seasonId: 87682, token: "2421c3", knownEventIds: [555, 777] });
+  it("uses the same-origin base and the x-requested-with token", () => {
+    expect(snip).toContain("https://www.sofascore.com/api/v1");
+    expect(snip).toContain('"x-requested-with"');
+    expect(snip).toContain('"2421c3"');
+  });
+  it("bakes in the tournament/season and known ids to skip", () => {
+    expect(snip).toContain("192");
+    expect(snip).toContain("87682");
+    expect(snip).toContain("[555,777]");
+  });
+  it("copies a blob and detects an expired token", () => {
+    expect(snip).toContain("copy(");
+    expect(snip).toContain("token expired");
   });
 });

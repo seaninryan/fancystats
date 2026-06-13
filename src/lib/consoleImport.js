@@ -43,3 +43,52 @@ export function applyDecoded(data, decoded, now) {
   for (const r of decoded.results) next = applyImport(next, r, now);
   return next;
 }
+
+// Returns the console snippet source. The user pastes it into a sofascore.com tab's
+// DevTools console; it walks the season, skips KNOWN ids, fetches event+lineups+
+// incidents for the rest, and copies a path-keyed blob to the clipboard via copy().
+export function buildImportSnippet({ tournamentId, seasonId, token, knownEventIds }) {
+  const known = JSON.stringify(knownEventIds || []);
+  return `// fancystats import — run on a https://www.sofascore.com tab (DevTools console).
+(async () => {
+  const BASE = "https://www.sofascore.com/api/v1";
+  const TOKEN = ${JSON.stringify(token || "")};
+  const T = ${Number(tournamentId)}, S = ${Number(seasonId)};
+  const KNOWN = new Set(${known});
+  const payloads = {};
+  const get = async (path) => {
+    const r = await fetch(BASE + path, { headers: { "x-requested-with": TOKEN }, credentials: "include" });
+    if (r.status === 403) throw new Error("challenge");
+    if (r.status === 404) { payloads[path] = { __status: 404 }; return null; }
+    const body = await r.json();
+    payloads[path] = body;
+    return body;
+  };
+  const walk = async (dir) => {
+    const out = [];
+    for (let p = 0; p < 20; p++) {
+      const body = await get(\`/unique-tournament/\${T}/season/\${S}/events/\${dir}/\${p}\`);
+      if (!body) break;
+      out.push(...(body.events || []));
+      if (!body.hasNextPage) break;
+    }
+    return out;
+  };
+  try {
+    const events = [...(await walk("last")), ...(await walk("next"))];
+    const todo = events.filter((e) => e.status?.type === "finished" && !KNOWN.has(e.id));
+    for (const e of todo) {
+      await get(\`/event/\${e.id}\`);
+      await get(\`/event/\${e.id}/lineups\`);
+      await get(\`/event/\${e.id}/incidents\`);
+    }
+    const blob = { meta: { tournamentId: T, seasonId: S, builtFor: todo.map((e) => e.id) }, payloads };
+    copy(JSON.stringify(blob));
+    console.log(\`%cfancystats: captured \${todo.length} match(es) — paste into the app.\`, "color:lime;font-weight:bold");
+  } catch (e) {
+    if (e.message === "challenge")
+      console.log("%cfancystats: token expired — copy a fresh x-requested-with from any Network request and update it in the app.", "color:red;font-weight:bold");
+    else console.log("%cfancystats: " + e.message, "color:red");
+  }
+})();`;
+}
