@@ -83,8 +83,13 @@ export function buildImportSnippet({ tournamentId, seasonId, token, knownEventId
       await get(\`/event/\${e.id}/incidents\`);
     }
     const blob = { meta: { tournamentId: T, seasonId: S, builtFor: todo.map((e) => e.id) }, payloads };
-    copy(JSON.stringify(blob));
-    console.log(\`%cfancystats: captured \${todo.length} match(es) — paste into the app.\`, "color:lime;font-weight:bold");
+    // copy() (DevTools Command Line API) is out of scope inside this async IIFE after an
+    // await, so don't rely on it: stash on window and attempt a normal clipboard write.
+    // navigator.clipboard rejects if the page isn't focused (focus is in DevTools) — caught.
+    const json = JSON.stringify(blob);
+    window.fancystatsBlob = json;
+    try { await navigator.clipboard.writeText(json); } catch (err) { /* not focused — use the fallback */ }
+    console.log(\`%cfancystats: captured \${todo.length} match(es). If your clipboard is empty, run  copy(fancystatsBlob)  then paste into the app.\`, "color:lime;font-weight:bold");
   } catch (e) {
     if (e.message === "challenge")
       console.log("%cfancystats: token expired — copy a fresh x-requested-with from any Network request and update it in the app.", "color:red;font-weight:bold");

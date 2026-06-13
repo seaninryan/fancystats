@@ -79,8 +79,10 @@ describe("buildImportSnippet", () => {
     expect(snip).toContain("87682");
     expect(snip).toContain("[555,777]");
   });
-  it("copies a blob and detects an expired token", () => {
-    expect(snip).toContain("copy(");
+  it("stashes the blob for copying (not the console copy() builtin) and detects an expired token", () => {
+    expect(snip).toContain("fancystatsBlob");
+    expect(snip).toContain("navigator.clipboard.writeText");
+    expect(snip).toContain("copy(fancystatsBlob)"); // user-runnable fallback at the prompt
     expect(snip).toContain("token expired");
   });
 });
