@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { fetchSeasonEvents, importMatch, sleep } from "../lib/sofascore.js";
+import { useEffect, useMemo, useRef } from "react";
 import { upsertMatchStubs, applyImport, matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
 import { TeamPill, PtsPill } from "./Pills.jsx";
+import ConsoleImport from "./ConsoleImport.jsx";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -15,44 +15,11 @@ const teamLabel = (t) => (
 );
 
 export default function MatchesTab({ data, update }) {
-  const [busy, setBusy] = useState(null);
-  const [error, setError] = useState(null);
   const currentRef = useRef(null);
-
-  const sync = async () => {
-    setBusy("Checking for matches…"); setError(null);
-    try {
-      const { stubs, teams } = await fetchSeasonEvents(data.meta);
-      const now = Date.now();
-      update((d) => {
-        const next = upsertMatchStubs(d, stubs, teams);
-        next.meta = { ...next.meta, lastEventSync: now };
-        return next;
-      });
-    } catch (e) { setError(`Sync failed: ${e.message}`); }
-    setBusy(null);
-  };
-
-  const runImport = async (eventIds) => {
-    setError(null);
-    const results = [];
-    for (let i = 0; i < eventIds.length; i++) {
-      setBusy(`Importing ${i + 1}/${eventIds.length}…`);
-      try { results.push(await importMatch(eventIds[i])); }
-      catch (e) { setError(`Stopped at match ${eventIds[i]}: ${e.message}. Imported ${results.length} before failing.`); break; }
-      if (i < eventIds.length - 1) await sleep(300);
-    }
-    if (results.length) {
-      const now = Date.now();
-      update((d) => results.reduce((acc, r) => applyImport(acc, r, now), d));
-    }
-    setBusy(null);
-  };
 
   const all = Object.values(data.matches);
   const hiddenShells = all.filter((m) => isSupersededPostponed(data, m)).length;
   const matches = all.filter((m) => !isSupersededPostponed(data, m));
-  const missing = matches.filter((m) => m.status === "finished" && !m.importedAt);
   const gone = (m) => m.status === "postponed" || m.status === "canceled";
   const todo = (m) => !gone(m) && ((m.status === "finished" && !m.importedAt) || m.status === "notstarted");
 
@@ -84,27 +51,8 @@ export default function MatchesTab({ data, update }) {
 
   return (
     <div>
-      <div className="card row">
-        <button onClick={sync} disabled={!!busy}>⟳ Check for new matches</button>
-        {missing.length > 0 && (
-          <button className="primary" disabled={!!busy} onClick={() => runImport(missing.map((m) => m.eventId))}>
-            Import all missing ({missing.length})
-          </button>
-        )}
-        {matches.some((m) => m.importedAt) && (
-          <button disabled={!!busy}
-            title="refresh every imported match with the current importer — stats added since import day (e.g. penalties) get backfilled"
-            onClick={() => runImport(matches.filter((m) => m.importedAt).map((m) => m.eventId))}>
-            ↻ Re-import all ({matches.filter((m) => m.importedAt).length})
-          </button>
-        )}
-        {busy && <span className="dim">{busy}</span>}
-        {data.meta.lastEventSync && !busy && (
-          <span className="dim">synced {fmtDate(data.meta.lastEventSync)}</span>
-        )}
-      </div>
-      {error && <div className="banner err">{error}</div>}
-      {matches.length === 0 && <p className="dim">No matches yet — tap "Check for new matches".</p>}
+      <ConsoleImport data={data} update={update} />
+      {matches.length === 0 && <p className="dim">No matches yet — run the console import above.</p>}
       {rounds.map(({ round, items }) => (
         <section
           key={round ?? "none"}
@@ -129,7 +77,6 @@ export default function MatchesTab({ data, update }) {
                 title="Move to another round"
                 value={m.roundOverride ?? ""}
                 onChange={(e) => moveMatch(m.eventId, e.target.value)}
-                disabled={!!busy}
               >
                 <option value="">R{m.round ?? "?"}</option>
                 {allRounds.filter((r) => r !== m.round).map((r) => (
@@ -138,14 +85,9 @@ export default function MatchesTab({ data, update }) {
               </select>
               {gone(m) ? <span className="dim">postponed</span>
                 : m.status !== "finished" ? <span className="dim">upcoming</span>
-                : m.importedAt && m.partial ? (
-                  <span className="row">
-                    <span className="banner warn" style={{ margin: 0 }}>no lineups</span>
-                    <button disabled={!!busy} onClick={() => runImport([m.eventId])}>Retry</button>
-                  </span>
-                )
+                : m.importedAt && m.partial ? <span className="banner warn" style={{ margin: 0 }}>no lineups — re-run import</span>
                 : m.importedAt ? <span style={{ color: "var(--accent)" }}>✓</span>
-                : <button className="primary" disabled={!!busy} onClick={() => runImport([m.eventId])}>Import</button>}
+                : <span className="dim">not imported</span>}
             </div>
           ))}
         </section>
