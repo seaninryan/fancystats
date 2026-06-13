@@ -714,3 +714,9 @@ describe("pens + site totals", () => {
     expect(teamSitePoints(d).get(1)).toEqual({ site: 25, withData: 1, missing: 1 });
   });
 });
+
+describe("emptyData meta", () => {
+  it("includes a null sofascoreToken slot", () => {
+    expect(emptyData().meta.sofascoreToken).toBe(null);
+  });
+});

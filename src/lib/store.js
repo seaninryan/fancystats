@@ -7,7 +7,7 @@ export const POS_MAP = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
 export function emptyData() {
   return {
     version: 1,
-    meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null },
+    meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null, sofascoreToken: null },
     teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {},
   };
 }
