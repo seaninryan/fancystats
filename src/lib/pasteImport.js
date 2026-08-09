@@ -85,7 +85,10 @@ function surnameInitialKey(name) {
   return `${parts[0][0]} ${parts[parts.length - 1]}`; // "p oconor"
 }
 
-// rows from parsePaste; players: data.players ({id: {name, pasteAlias, ...}})
+// rows from parsePaste (or a fantasy capture); players: data.players ({id: {name, pasteAlias, ...}})
+// A row may carry `teamId` (fantasy captures know the club): candidates are then
+// restricted to that team, which resolves same-named players across clubs. Rows
+// without `teamId` behave exactly as before.
 // -> { matched: [{playerId, name, value}], unmatched: [{name, value}] }
 export function matchPlayers(rows, players) {
   const byFull = new Map();
@@ -99,17 +102,21 @@ export function matchPlayers(rows, players) {
     const key = surnameInitialKey(p.name);
     if (key) byInitial.set(key, [...(byInitial.get(key) || []), id]);
   }
+  // ids are object keys (strings) but teamId is a number on the record — compare loosely
+  const onTeam = (id, teamId) => String(players[id]?.teamId) === String(teamId);
+  const pick = (ids, row) => {
+    const cands = row.teamId != null ? ids.filter((id) => onTeam(id, row.teamId)) : ids;
+    return cands.length === 1 ? cands[0] : null;
+  };
   const matched = [];
   const unmatched = [];
   for (const row of rows) {
     const norm = normalizeName(row.name);
-    const fullCandidates = byFull.get(norm) || [];
-    // duplicate full names (two John Murphys) stay unmatched for manual linking
-    let id = fullCandidates.length === 1 ? fullCandidates[0] : byAlias.get(norm);
+    // duplicate full names (two John Murphys) stay unmatched unless the club splits them
+    let id = pick(byFull.get(norm) || [], row) || byAlias.get(norm);
     if (!id) {
       const key = surnameInitialKey(row.name);
-      const candidates = key ? byInitial.get(key) || [] : [];
-      if (candidates.length === 1) id = candidates[0];
+      id = pick(key ? byInitial.get(key) || [] : [], row);
     }
     if (id) matched.push({ playerId: id, ...row });
     else unmatched.push(row);
@@ -117,20 +124,22 @@ export function matchPlayers(rows, players) {
   return { matched, unmatched };
 }
 
-// Candidate player ids for an unmatched paste row, best first. Shared words
-// (surnames, nicknames) score highest; containment breaks ties.
-export function suggestLinks(rowName, players) {
+// Candidate player ids for an unmatched row, best first. Shared words
+// (surnames, nicknames) score highest; containment breaks ties; a known club floats its own
+// players to the top.
+export function suggestLinks(rowName, players, teamId = null) {
   const norm = normalizeName(rowName);
   const words = norm.split(" ").filter(Boolean);
   return Object.entries(players)
     .map(([id, p]) => {
       const pn = normalizeName(p.customName || p.name);
+      const clubBonus = teamId != null && String(p.teamId) === String(teamId) ? 20 : 0;
       if (!pn) return { id, score: 0 };
-      if (pn === norm) return { id, score: 100 };
+      if (pn === norm) return { id, score: 100 + clubBonus };
       const pWords = pn.split(" ").filter(Boolean);
       let score = words.filter((w) => pWords.includes(w)).length * 10;
       if (score && (norm.includes(pn) || pn.includes(norm))) score += 5;
-      return { id, score };
+      return { id, score: score ? score + clubBonus : 0 };
     })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score)

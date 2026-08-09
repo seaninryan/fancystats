@@ -148,3 +148,46 @@ describe("two-column site format (price + total points)", () => {
     expect(matched).toEqual([{ playerId: "7", name: "Arlo Doherty", value: 25, price: 4 }]);
   });
 });
+
+describe("matchPlayers with a per-row teamId", () => {
+  const players = {
+    21: { name: "John Murphy", teamId: 1, pasteAlias: null },
+    22: { name: "John Murphy", teamId: 2, pasteAlias: null },
+    23: { name: "Colm Whelan", teamId: 1, pasteAlias: null },
+  };
+  it("resolves same-named players using the row's club", () => {
+    const { matched } = matchPlayers([{ name: "John Murphy", teamId: 1, price: 5 }], players);
+    expect(matched[0].playerId).toBe("21");
+  });
+  it("teamId is compared loosely (string row id vs number player id)", () => {
+    const { matched } = matchPlayers([{ name: "John Murphy", teamId: "2" }], players);
+    expect(matched[0].playerId).toBe("22");
+  });
+  it("a name on the wrong club stays unmatched instead of matching by name", () => {
+    const { matched, unmatched } = matchPlayers([{ name: "Colm Whelan", teamId: 2 }], players);
+    expect(matched).toEqual([]);
+    expect(unmatched[0].name).toBe("Colm Whelan");
+  });
+  it("no teamId on the row keeps the old name-only behaviour", () => {
+    const { matched, unmatched } = matchPlayers([{ name: "John Murphy" }], players);
+    expect(matched).toEqual([]);            // ambiguous, as before
+    expect(unmatched[0].name).toBe("John Murphy");
+  });
+  it("surname+initial matching is club-constrained too", () => {
+    const { matched } = matchPlayers([{ name: "J. Murphy", teamId: 2 }], players);
+    expect(matched[0].playerId).toBe("22");
+  });
+});
+
+describe("suggestLinks with a teamId", () => {
+  const players = {
+    31: { name: "Graham Burke", teamId: 1, pasteAlias: null },
+    32: { name: "Graham Burke", teamId: 2, pasteAlias: null },
+  };
+  it("ranks the same-club candidate first", () => {
+    expect(suggestLinks("Graham Burke", players, 2)[0]).toBe("32");
+  });
+  it("without a teamId the order is unchanged", () => {
+    expect(suggestLinks("Graham Burke", players)).toEqual(["31", "32"]);
+  });
+});

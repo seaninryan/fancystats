@@ -7,7 +7,7 @@ export const POS_MAP = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
 export function emptyData() {
   return {
     version: 1,
-    meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null, sofascoreToken: null },
+    meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null, sofascoreToken: null, fantasyClubMap: {} },
     teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {},
   };
 }
@@ -190,6 +190,29 @@ export function applyPasteResults(data, matched, kind, now) {
       p.sitePoints = m.value;
     }
     if (m.alias) p.pasteAlias = m.alias;
+  }
+  return next;
+}
+
+// Fold a fantasy-site capture into the data object. Each row is
+// {playerId, gamePosition, price, sitePoints, alias?}; a null field means "the
+// capture didn't carry this", never "clear it". User-owned fields (a manually set
+// gamePosition, stars, flags, inSquad) are never touched — same split as re-imports.
+export function applyFantasyRows(data, rows, now) {
+  const next = structuredClone(data);
+  for (const r of rows) {
+    const p = next.players[r.playerId];
+    if (!p) continue;
+    if (r.price != null) {
+      p.price = r.price;
+      p.priceUpdatedAt = now;
+    }
+    if (r.sitePoints != null) p.sitePoints = r.sitePoints;
+    if (r.gamePosition && p.gamePositionSource !== "manual") {
+      p.gamePosition = r.gamePosition;
+      p.gamePositionSource = "fantasy";
+    }
+    if (r.alias) p.pasteAlias = r.alias;
   }
   return next;
 }
