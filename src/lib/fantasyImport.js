@@ -86,7 +86,7 @@ export function buildFantasySnippet() {
     if (!r.ok) throw new Error("HTTP " + r.status + " on " + Statistic + "/" + Club + "/" + Position);
     const doc = new DOMParser().parseFromString(await r.text(), "text/html");
     if (!doc.querySelector("select#Club")) throw new Error("session expired — log in again, then re-run");
-    return [...doc.querySelectorAll("table tbody tr")].map((tr) => {
+    return [...doc.querySelectorAll("table.table tbody tr")].map((tr) => {
       const img = tr.querySelector("img");
       return {
         name: (tr.cells[1] ? tr.cells[1].textContent : "").trim(),

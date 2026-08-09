@@ -104,6 +104,7 @@ describe("buildFantasySnippet", () => {
     expect(snip).toContain("__RequestVerificationToken");
     expect(snip).toContain('method: "POST"');
     expect(snip).toContain('credentials: "include"');
+    expect(snip).toContain("table.table tbody tr"); // scoped to the results table, not any table on the page
   });
   it("runs both statistic passes and every position", () => {
     expect(snip).toContain('"Value"');
