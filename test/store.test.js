@@ -12,6 +12,7 @@ import {
   hotEventIds,
   playerClimb,
   teamSitePoints,
+  applyFantasyRows,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -718,5 +719,43 @@ describe("pens + site totals", () => {
 describe("emptyData meta", () => {
   it("includes a null sofascoreToken slot", () => {
     expect(emptyData().meta.sofascoreToken).toBe(null);
+  });
+});
+
+describe("applyFantasyRows", () => {
+  const row = (over) => ({ playerId: "10", name: "A Keena", clubId: "1", teamId: "1",
+    gamePosition: "FWD", price: 8.3, sitePoints: 137, ...over });
+
+  it("writes price, timestamp, site points and position", () => {
+    const d = applyFantasyRows(importedFixture(), [row()], NOW);
+    expect(d.players["10"]).toMatchObject({
+      price: 8.3, priceUpdatedAt: NOW, sitePoints: 137,
+      gamePosition: "FWD", gamePositionSource: "fantasy",
+    });
+  });
+  it("never clobbers a manually set position", () => {
+    let d = setPlayerField(importedFixture(), 10, "gamePosition", "MID");
+    d = applyFantasyRows(d, [row()], NOW);
+    expect(d.players["10"]).toMatchObject({ gamePosition: "MID", gamePositionSource: "manual" });
+    expect(d.players["10"].price).toBe(8.3); // the rest of the row still applies
+  });
+  it("a null field leaves the stored value alone", () => {
+    let d = applyFantasyRows(importedFixture(), [row()], NOW);
+    d = applyFantasyRows(d, [row({ price: null, sitePoints: null, gamePosition: null })], NOW + 1);
+    expect(d.players["10"]).toMatchObject({ price: 8.3, priceUpdatedAt: NOW, sitePoints: 137, gamePosition: "FWD" });
+  });
+  it("remembers a manual-link alias", () => {
+    const d = applyFantasyRows(importedFixture(), [row({ alias: "A. Keena (FLOI)" })], NOW);
+    expect(d.players["10"].pasteAlias).toBe("A. Keena (FLOI)");
+  });
+  it("ignores rows for unknown players and does not mutate the input", () => {
+    const before = importedFixture();
+    const snapshot = JSON.stringify(before);
+    const d = applyFantasyRows(before, [row({ playerId: "999" })], NOW);
+    expect(d.players["999"]).toBeUndefined();
+    expect(JSON.stringify(before)).toBe(snapshot);
+  });
+  it("emptyData carries an empty fantasyClubMap", () => {
+    expect(emptyData().meta.fantasyClubMap).toEqual({});
   });
 });
