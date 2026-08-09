@@ -30,3 +30,27 @@ export function parseFantasyBlob(text) {
   if (!players.length) throw new Error("No players in the capture — are you logged in on the fantasy site?");
   return { clubs: Array.isArray(blob.meta.clubs) ? blob.meta.clubs : [], players };
 }
+
+// Pure: fantasy club id -> our SofaScore team id. Auto-resolves by normalized name,
+// which absorbs the site's punctuation drift ("St Patricks Athletic" vs SofaScore's
+// "St. Patrick's Athletic"). A stored user override always wins. Unknown -> null,
+// never a guess: a wrong club would gate name matching to the wrong squad.
+export function mapClubs(clubs, teams, overrides = {}) {
+  const byName = new Map();
+  for (const [id, t] of Object.entries(teams || {})) {
+    if (t?.name) byName.set(normalizeName(t.name), id);
+  }
+  const out = {};
+  for (const c of clubs || []) {
+    const id = String(c.id);
+    const override = (overrides || {})[id];
+    out[id] = override ? String(override) : byName.get(normalizeName(c.name || "")) ?? null;
+  }
+  return out;
+}
+
+// Pure: stamp each capture row with the team it belongs to (null when unresolved,
+// which makes matchPlayers fall back to name-only matching for that row).
+export function withTeamIds(players, clubMap) {
+  return (players || []).map((p) => ({ ...p, teamId: (p.clubId && clubMap?.[p.clubId]) || null }));
+}

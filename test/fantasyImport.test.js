@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFantasyBlob } from "../src/lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds } from "../src/lib/fantasyImport.js";
 
 const goodBlob = () => ({
   meta: { source: "fantasyloi", capturedAt: 1770000000000, clubs: [{ id: "14420", name: "Bohemians" }] },
@@ -42,5 +42,45 @@ describe("parseFantasyBlob", () => {
   it("rejects an empty capture", () => {
     expect(() => parseFantasyBlob({ meta: { source: "fantasyloi" }, players: [] }))
       .toThrow(/No players/);
+  });
+});
+
+describe("mapClubs", () => {
+  const teams = {
+    1: { name: "Bohemians", shortName: "BOH" },
+    2: { name: "St. Patrick's Athletic", shortName: "STP" },
+    3: { name: "Shamrock Rovers", shortName: "SRO" },
+  };
+  const clubs = [
+    { id: "14420", name: "Bohemians" },
+    { id: "55386", name: "St Patricks Athletic" },
+    { id: "99999", name: "Cork City" },
+  ];
+  it("auto-resolves across punctuation drift", () => {
+    const m = mapClubs(clubs, teams);
+    expect(m["14420"]).toBe("1");
+    expect(m["55386"]).toBe("2"); // "St Patricks Athletic" vs "St. Patrick's Athletic"
+  });
+  it("leaves an unknown club unresolved rather than guessing", () => {
+    expect(mapClubs(clubs, teams)["99999"]).toBe(null);
+  });
+  it("a stored override wins over auto-resolution", () => {
+    expect(mapClubs(clubs, teams, { 14420: "3" })["14420"]).toBe("3");
+  });
+  it("handles missing clubs/teams without throwing", () => {
+    expect(mapClubs(undefined, undefined)).toEqual({});
+  });
+});
+
+describe("withTeamIds", () => {
+  it("attaches the resolved teamId, null when unresolved", () => {
+    const players = [
+      { name: "A", clubId: "14420" },
+      { name: "B", clubId: "99999" },
+      { name: "C", clubId: null },
+    ];
+    const rows = withTeamIds(players, { 14420: "1", 99999: null });
+    expect(rows.map((r) => r.teamId)).toEqual(["1", null, null]);
+    expect(rows[0].name).toBe("A"); // other fields survive
   });
 });
