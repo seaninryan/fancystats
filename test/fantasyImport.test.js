@@ -43,6 +43,18 @@ describe("parseFantasyBlob", () => {
     expect(() => parseFantasyBlob({ meta: { source: "fantasyloi" }, players: [] }))
       .toThrow(/No players/);
   });
+  it("accepts numeric strings and rejects junk, keeping 0 distinct from empty", () => {
+    const blob = goodBlob();
+    blob.players = [
+      { name: "A", price: "8.3", sitePoints: "137" },
+      { name: "B", price: "", sitePoints: 0 },
+      { name: "C", price: "n/a", sitePoints: NaN },
+    ];
+    const rows = parseFantasyBlob(blob).players;
+    expect(rows[0]).toMatchObject({ price: 8.3, sitePoints: 137 });
+    expect(rows[1]).toMatchObject({ price: null, sitePoints: 0 });
+    expect(rows[2]).toMatchObject({ price: null, sitePoints: null });
+  });
 });
 
 describe("mapClubs", () => {

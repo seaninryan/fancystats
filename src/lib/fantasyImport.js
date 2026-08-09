@@ -7,7 +7,13 @@ import { normalizeName } from "./pasteImport.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 
-const numOrNull = (v) => (Number.isFinite(v) ? v : null);
+// Accept a number or a numeric string ("8.3"); anything else -> null. Coercing
+// rather than rejecting matters because a silently dropped price is invisible.
+const numOrNull = (v) => {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 // Pure: validate + normalize a pasted capture. Throws user-facing messages.
 export function parseFantasyBlob(text) {
