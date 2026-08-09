@@ -1,7 +1,8 @@
 // src/components/SettingsTab.jsx
 import { useState } from "react";
-import { parsePaste, matchPlayers, suggestLinks } from "../lib/pasteImport.js";
+import { parsePaste, matchPlayers } from "../lib/pasteImport.js";
 import { applyPasteResults } from "../lib/store.js";
+import UnmatchedLinks from "./UnmatchedLinks.jsx";
 
 const KINDS = [
   ["price", "Prices (Statistic = Value, Position = All)"],
@@ -59,33 +60,13 @@ export default function SettingsTab({ data, update }) {
         {preview && (
           <div style={{ marginTop: 8 }}>
             <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched</p>
-            {preview.unmatched.map((u, i) => (
-              <div className="row" key={i}>
-                <span style={{ flex: 1 }}>&ldquo;{u.name}&rdquo; ({u.value}{u.price != null ? ` · €${u.price}` : ""})</span>
-                <select value={preview.links[i] || ""}
-                  onChange={(e) => setPreview({ ...preview, links: { ...preview.links, [i]: e.target.value || undefined } })}>
-                  <option value="">skip</option>
-                  {(() => {
-                    const sugg = suggestLinks(u.name, data.players);
-                    const all = Object.entries(data.players)
-                      .filter(([id]) => !sugg.includes(id))
-                      .sort((a, b) => (a[1].customName || a[1].name).localeCompare(b[1].customName || b[1].name));
-                    return (
-                      <>
-                        {sugg.length > 0 && (
-                          <optgroup label="Suggested">
-                            {sugg.map((id) => <option key={id} value={id}>{data.players[id].customName || data.players[id].name} ({data.teams[data.players[id].teamId]?.shortName})</option>)}
-                          </optgroup>
-                        )}
-                        <optgroup label="All players">
-                          {all.map(([id, p]) => <option key={id} value={id}>{p.customName || p.name} ({data.teams[p.teamId]?.shortName})</option>)}
-                        </optgroup>
-                      </>
-                    );
-                  })()}
-                </select>
-              </div>
-            ))}
+            <UnmatchedLinks
+              data={data}
+              unmatched={preview.unmatched}
+              links={preview.links}
+              onChange={(i, pid) => setPreview({ ...preview, links: { ...preview.links, [i]: pid } })}
+              describe={(u) => `${u.value}${u.price != null ? ` · €${u.price}` : ""}`}
+            />
           </div>
         )}
       </div>
