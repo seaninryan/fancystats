@@ -37,8 +37,19 @@ The returned HTML (captured in full) shows:
   `<statistic>`; each `<tr>` is club crest `<img>`, name, value.
 
 **Player Stats is league-wide** — it is not the transfer-options list, so it already
-contains the user's own squad. Problem 2 is solved by changing *which page* the data
-comes from; no team-sheet scraping is required.
+contains the user's own squad. Verified by replaying the POST for one club
+(`Club=14420`, `Statistic=Value`, `Position=All`): 24 rows — Bohemians' full squad,
+including three players the user currently owns. Problem 2 is solved by changing
+*which page* the data comes from; no team-sheet scraping is required.
+
+**`Statistic=Value` is the fantasy price.** Verified by the same replay: the third
+`<th>` reads `Value` and cells are bare decimals — `9.4`, and `9` for whole numbers.
+No currency symbol, no thousands separator. `parseFloat` on the cell text is
+sufficient. Crest `src` came back as a stable path (`/Images/Crests/PremierDivision/
+Bohemians.png`), confirming it works as the pass A ↔ pass B join key.
+
+The third column **is** the statistic, so a single request can return price or score
+but never both — this is what forces the two-pass design below.
 
 Because the token and cookies live in the user's logged-in tab, this must run
 in-page, exactly like the SofaScore snippet.
@@ -95,9 +106,9 @@ app code. The split follows the SofaScore feature:
 ```
 
 `position` is normalized to the app's `GK|DEF|MID|FWD` inside the snippet. `price`
-and `sitePoints` are numbers or `null`. The `Value` column's exact rendering is
-unverified (`4.0` vs `€4.0m`); the cell parser takes the first float found, which
-handles either.
+and `sitePoints` are numbers or `null`. Cell values are bare decimals (verified);
+the parser still takes the first float found, so a later currency prefix would not
+break it.
 
 ### New units
 
