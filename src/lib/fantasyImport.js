@@ -128,7 +128,9 @@ export function buildFantasySnippet() {
     try { await navigator.clipboard.writeText(json); } catch (err) { /* not focused — use the fallback */ }
     say("captured " + blob.players.length + " players. If your clipboard is empty, run  copy(fancystatsFantasyBlob)  then paste into the app.", "lime");
   } catch (e) {
-    say(e.message, "red");
+    // all-or-nothing: the blob is only built after both passes, so a throw here
+    // means nothing was captured. Say so — an error alone reads as "partly done".
+    say(e.message + " — nothing captured, re-run from the start.", "red");
   }
 })();`;
 }

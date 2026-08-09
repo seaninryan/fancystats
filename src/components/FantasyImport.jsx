@@ -42,7 +42,8 @@ export default function FantasyImport({ data, update }) {
       .map((u, i) => ({ u, pid: preview.links[i] }))
       .filter((x) => x.pid)
       .map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
-    update((d) => applyFantasyRows(d, [...preview.matched, ...linked], Date.now()));
+    const now = Date.now(); // updaters stay pure — same convention as the paste card
+    update((d) => applyFantasyRows(d, [...preview.matched, ...linked], now));
     setPreview(null);
     setPaste("");
   };
