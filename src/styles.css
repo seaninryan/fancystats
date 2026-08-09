@@ -114,3 +114,20 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
   border-left: 6px solid transparent; }
 .pts-diff.site-up::after { border-top: 6px solid var(--accent); }
 .pts-diff.site-down::after { border-top: 6px solid var(--err); }
+
+/* Import panels: unmatched-row linker. The select sits far from the name, so the
+   row needs a strong trace cue — zebra stripes for static scanning, a tinted row
+   with an accent edge on hover for following one line across. */
+.link-rows { margin-top: 8px; }
+.link-head, .link-row {
+  display: flex; gap: 8px; align-items: center;
+  padding: 3px 6px; border-radius: 6px;
+}
+.link-head { color: var(--dim); font-size: 12px; font-weight: 600;
+  border-bottom: 1px solid var(--line); padding-bottom: 5px; margin-bottom: 2px; }
+.link-row:nth-child(even) { background: rgba(93, 113, 128, .07); }
+.link-row:hover { background: rgba(31, 122, 77, .12); box-shadow: inset 3px 0 0 var(--accent); }
+.link-row.link-done .link-name { font-weight: 600; color: var(--accent); }
+.link-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.link-cell { flex: none; color: var(--dim); font-variant-numeric: tabular-nums; }
+.link-pick { flex: none; width: 16rem; }

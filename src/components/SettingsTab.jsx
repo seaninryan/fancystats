@@ -68,7 +68,10 @@ export default function SettingsTab({ data, update }) {
               unmatched={preview.unmatched}
               links={preview.links}
               onChange={(i, pid) => setPreview({ ...preview, links: { ...preview.links, [i]: pid } })}
-              describe={(u) => `${u.value}${u.price != null ? ` · €${u.price}` : ""}`}
+              columns={[
+                { label: "Value", width: "5rem", value: (u) => (u.value != null ? String(u.value) : "") },
+                { label: "Price", width: "5rem", value: (u) => (u.price != null ? `€${u.price}` : "") },
+              ]}
             />
           </div>
         )}

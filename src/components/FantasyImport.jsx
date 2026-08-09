@@ -49,6 +49,7 @@ export default function FantasyImport({ data, update }) {
   };
 
   const unresolved = preview ? preview.clubs.filter((c) => !preview.clubMap[String(c.id)]) : [];
+  const clubName = new Map((preview?.clubs || []).map((c) => [String(c.id), c.name]));
   const linkCount = preview ? Object.values(preview.links).filter(Boolean).length : 0;
 
   return (
@@ -83,9 +84,10 @@ export default function FantasyImport({ data, update }) {
             <div style={{ marginBottom: 8 }}>
               <p className="dim">Unrecognised clubs — bind them once and it&rsquo;s remembered:</p>
               {unresolved.map((c) => (
-                <div className="row" key={c.id}>
-                  <span style={{ flex: 1 }}>{c.name}</span>
-                  <select value="" onChange={(e) => e.target.value && setClub(String(c.id), e.target.value)}>
+                <div className="link-row" key={c.id}>
+                  <span className="link-name">{c.name}</span>
+                  <select className="link-pick" value=""
+                    onChange={(e) => e.target.value && setClub(String(c.id), e.target.value)}>
                     <option value="">choose team…</option>
                     {Object.entries(data.teams)
                       .sort((a, b) => a[1].name.localeCompare(b[1].name))
@@ -100,7 +102,14 @@ export default function FantasyImport({ data, update }) {
             unmatched={preview.unmatched}
             links={preview.links}
             onChange={(i, pid) => setPreview({ ...preview, links: { ...preview.links, [i]: pid } })}
-            describe={(u) => [u.gamePosition, u.price != null ? `€${u.price}` : null, u.sitePoints != null ? `${u.sitePoints} pts` : null].filter(Boolean).join(" · ")}
+            columns={[
+              { label: "Pos", width: "3.5rem", value: (u) => u.gamePosition },
+              { label: "Price", width: "4.5rem", value: (u) => (u.price != null ? `€${u.price}` : "") },
+              // pts is the triage signal: 0 means they've never played, so there's
+              // no SofaScore record to link them to and skipping is correct
+              { label: "Pts", width: "3.5rem", value: (u) => (u.sitePoints != null ? String(u.sitePoints) : "") },
+              { label: "Club", width: "9.5rem", value: (u) => clubName.get(String(u.clubId)) || "" },
+            ]}
           />
         </div>
       )}

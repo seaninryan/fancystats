@@ -1,25 +1,35 @@
 // src/components/UnmatchedLinks.jsx
-// Shared by both import cards: one row per unmatched capture/paste row, with a
-// select for binding it to a SofaScore player. `describe` renders the optional
-// parenthetical after the name; a row's `teamId` (fantasy captures) floats that
-// club's players to the top of the suggestions.
+// Shared by both import cards: a column-aligned list of unmatched rows, each with a
+// select for binding it to a SofaScore player. Callers supply `columns` —
+// [{label, width, value(row)}] — because the two cards carry different fields
+// (the fantasy capture knows position/price/club; a paste only knows its numbers).
+// A row's `teamId` (fantasy captures) floats that club's players to the top of the
+// suggestions.
 import { suggestLinks } from "../lib/pasteImport.js";
 
-export default function UnmatchedLinks({ data, unmatched, links, onChange, describe }) {
+export default function UnmatchedLinks({ data, unmatched, links, onChange, columns = [] }) {
   const label = (p) => `${p.customName || p.name} (${data.teams[p.teamId]?.shortName})`;
+  if (!unmatched.length) return null;
   return (
-    <>
+    <div className="link-rows">
+      <div className="link-head">
+        <span className="link-name">Name on the fantasy site</span>
+        {columns.map((c) => <span key={c.label} className="link-cell" style={{ width: c.width }}>{c.label}</span>)}
+        <span className="link-pick">Link to</span>
+      </div>
       {unmatched.map((u, i) => {
         const sugg = suggestLinks(u.name, data.players, u.teamId ?? null);
         const all = Object.entries(data.players)
           .filter(([id]) => !sugg.includes(id))
           .sort((a, b) => (a[1].customName || a[1].name).localeCompare(b[1].customName || b[1].name));
         return (
-          <div className="row" key={i}>
-            <span style={{ flex: 1 }}>
-              &ldquo;{u.name}&rdquo;{describe ? ` (${describe(u)})` : ""}
-            </span>
-            <select value={links[i] || ""} onChange={(e) => onChange(i, e.target.value || undefined)}>
+          <div className={`link-row${links[i] ? " link-done" : ""}`} key={i}>
+            <span className="link-name">{u.name}</span>
+            {columns.map((c) => (
+              <span key={c.label} className="link-cell" style={{ width: c.width }}>{c.value(u) ?? ""}</span>
+            ))}
+            <select className="link-pick" value={links[i] || ""}
+              onChange={(e) => onChange(i, e.target.value || undefined)}>
               <option value="">skip</option>
               {sugg.length > 0 && (
                 <optgroup label="Suggested">
@@ -33,6 +43,6 @@ export default function UnmatchedLinks({ data, unmatched, links, onChange, descr
           </div>
         );
       })}
-    </>
+    </div>
   );
 }

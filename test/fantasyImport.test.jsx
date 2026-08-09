@@ -26,11 +26,29 @@ describe("UnmatchedLinks SSR", () => {
     expect(html).toContain("skip");
     expect(html).toContain("(BOH)");
   });
-  it("renders the optional description", () => {
+  it("renders a header and a cell per column", () => {
     const html = renderToStaticMarkup(
-      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "C. Whelan", price: 8.3 }]}
-        links={{}} onChange={() => {}} describe={(u) => `€${u.price}`} />);
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "C. Whelan", price: 8.3, gamePosition: "DEF" }]}
+        links={{}} onChange={() => {}}
+        columns={[
+          { label: "Pos", width: "3.5rem", value: (u) => u.gamePosition },
+          { label: "Price", width: "4.5rem", value: (u) => `€${u.price}` },
+        ]} />);
+    expect(html).toContain("Pos");
+    expect(html).toContain("Price");
+    expect(html).toContain("DEF");
     expect(html).toContain("8.3");
+  });
+  it("renders nothing when there is nothing to link", () => {
+    const html = renderToStaticMarkup(
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[]} links={{}} onChange={() => {}} />);
+    expect(html).toBe("");
+  });
+  it("marks a linked row as done", () => {
+    const html = renderToStaticMarkup(
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "C. Whelan" }]}
+        links={{ 0: "10" }} onChange={() => {}} />);
+    expect(html).toContain("link-done");
   });
 });
 
