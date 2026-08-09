@@ -78,6 +78,7 @@ export function buildFantasySnippet() {
   const clubSel = document.querySelector("select#Club");
   if (!token || !clubSel) return say("couldn't find the search form — make sure you're logged in, open Stats > Player Stats, then re-run.", "red");
   const clubs = [...clubSel.options].filter((o) => o.value !== "All").map((o) => ({ id: o.value, name: o.text.trim() }));
+  window.fancystatsFantasyBlob = null; // clear any earlier run's blob so a failure can't leave a stale one to copy
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const num = (s) => { const m = String(s == null ? "" : s).match(/-?\\d+(?:\\.\\d+)?/); return m ? parseFloat(m[0]) : null; };
   const post = async (Statistic, Club, Position) => {
