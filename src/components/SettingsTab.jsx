@@ -4,6 +4,7 @@ import { parsePaste, matchPlayers } from "../lib/pasteImport.js";
 import { applyPasteResults } from "../lib/store.js";
 import UnmatchedLinks from "./UnmatchedLinks.jsx";
 import FantasyImport from "./FantasyImport.jsx";
+import ConsoleImport from "./ConsoleImport.jsx";
 
 const KINDS = [
   ["price", "Prices (Statistic = Value, Position = All)"],
@@ -36,9 +37,10 @@ export default function SettingsTab({ data, update }) {
 
   return (
     <div>
+      <ConsoleImport data={data} update={update} />
       <FantasyImport data={data} update={update} />
-      <div className="card">
-        <h3>Import from the fantasy game (paste)</h3>
+      <details className="card fold">
+        <summary><h3>Import from the fantasy game (paste)</h3></summary>
         <p className="dim">
           Fallback for when the snippet above can&rsquo;t run. Open the fantasy game&rsquo;s
           Stats → Player Stats page, set the dropdowns to match your selection below,
@@ -75,7 +77,7 @@ export default function SettingsTab({ data, update }) {
             />
           </div>
         )}
-      </div>
+      </details>
       <div className="card">
         <h3>Season</h3>
         <p className="dim">

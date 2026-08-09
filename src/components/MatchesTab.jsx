@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
 import { TeamPill, PtsPill } from "./Pills.jsx";
-import ConsoleImport from "./ConsoleImport.jsx";
 
 const fmtDate = (ts) =>
   new Date(ts).toLocaleDateString("en-IE", { weekday: "short", day: "numeric", month: "short" });
@@ -51,8 +50,7 @@ export default function MatchesTab({ data, update }) {
 
   return (
     <div>
-      <ConsoleImport data={data} update={update} />
-      {matches.length === 0 && <p className="dim">No matches yet — run the console import above.</p>}
+      {matches.length === 0 && <p className="dim">No matches yet — run the console import on the ⚙ Settings tab.</p>}
       {rounds.map(({ round, items }) => (
         <section
           key={round ?? "none"}

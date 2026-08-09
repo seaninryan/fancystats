@@ -99,10 +99,10 @@ export default function App() {
       </nav>
       {(() => {
         const stale = staleInfo(data, Date.now());
-        return stale.count > 0 && tab !== "matches" ? (
+        return stale.count > 0 && tab !== "settings" ? (
           <div className="banner warn" role="status">
             Stats may be out of date — {stale.count} match{stale.count > 1 ? "es" : ""} played since the last update.{" "}
-            <button onClick={() => setTab("matches")}>Go to Matches</button>
+            <button onClick={() => setTab("settings")}>Go to Settings</button>
           </div>
         ) : null;
       })()}

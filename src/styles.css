@@ -131,3 +131,12 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 .link-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .link-cell { flex: none; color: var(--dim); font-variant-numeric: tabular-nums; }
 .link-pick { flex: none; width: 16rem; }
+
+/* Collapsed card — the legacy paste import is kept as a fallback but stays out
+   of the way until it's needed. */
+.fold > summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; }
+.fold > summary::-webkit-details-marker { display: none; }
+.fold > summary::before { content: "▸"; color: var(--dim); font-size: 13px; }
+.fold[open] > summary::before { content: "▾"; }
+.fold > summary h3 { display: inline; margin: 0; }
+.fold > summary:hover h3 { color: var(--accent); }
