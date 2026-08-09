@@ -3,6 +3,7 @@ import { useState } from "react";
 import { parsePaste, matchPlayers } from "../lib/pasteImport.js";
 import { applyPasteResults } from "../lib/store.js";
 import UnmatchedLinks from "./UnmatchedLinks.jsx";
+import FantasyImport from "./FantasyImport.jsx";
 
 const KINDS = [
   ["price", "Prices (Statistic = Value, Position = All)"],
@@ -35,11 +36,13 @@ export default function SettingsTab({ data, update }) {
 
   return (
     <div>
+      <FantasyImport data={data} update={update} />
       <div className="card">
-        <h3>Import from the fantasy game</h3>
+        <h3>Import from the fantasy game (paste)</h3>
         <p className="dim">
-          Open the fantasy game's Stats → Player Stats page, set the dropdowns to match
-          your selection below, select the whole results table, copy, and paste here.
+          Fallback for when the snippet above can&rsquo;t run. Open the fantasy game&rsquo;s
+          Stats → Player Stats page, set the dropdowns to match your selection below,
+          select the whole results table, copy, and paste here.
         </p>
         <div className="row">
           <select value={kind} onChange={(e) => { setKind(e.target.value); setPreview(null); }}>

@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { emptyData } from "../src/lib/store.js";
 import UnmatchedLinks from "../src/components/UnmatchedLinks.jsx";
+import FantasyImport from "../src/components/FantasyImport.jsx";
 
 const dataWithPlayers = () => ({
   ...emptyData(),
@@ -30,5 +31,14 @@ describe("UnmatchedLinks SSR", () => {
       <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "C. Whelan", price: 8.3 }]}
         links={{}} onChange={() => {}} describe={(u) => `€${u.price}`} />);
     expect(html).toContain("8.3");
+  });
+});
+
+describe("FantasyImport SSR", () => {
+  it("renders the snippet and the paste box", () => {
+    const html = renderToStaticMarkup(<FantasyImport data={dataWithPlayers()} update={() => {}} />);
+    expect(html).toContain("Import from Fantasy LOI");
+    expect(html).toContain("/Stats/PlayerStats");
+    expect(html).toContain("Copy snippet");
   });
 });
