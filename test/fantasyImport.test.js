@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFantasyBlob, mapClubs, withTeamIds } from "../src/lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet } from "../src/lib/fantasyImport.js";
 
 const goodBlob = () => ({
   meta: { source: "fantasyloi", capturedAt: 1770000000000, clubs: [{ id: "14420", name: "Bohemians" }] },
@@ -94,5 +94,33 @@ describe("withTeamIds", () => {
     const rows = withTeamIds(players, { 14420: "1", 99999: null });
     expect(rows.map((r) => r.teamId)).toEqual(["1", null, null]);
     expect(rows[0].name).toBe("A"); // other fields survive
+  });
+});
+
+describe("buildFantasySnippet", () => {
+  const snip = buildFantasySnippet();
+  it("posts the site's own search form", () => {
+    expect(snip).toContain("/Stats/PlayerStats");
+    expect(snip).toContain("__RequestVerificationToken");
+    expect(snip).toContain('method: "POST"');
+    expect(snip).toContain('credentials: "include"');
+  });
+  it("runs both statistic passes and every position", () => {
+    expect(snip).toContain('"Value"');
+    expect(snip).toContain('"Total Score"');
+    for (const p of ["Goalkeeper", "Defender", "Midfielder", "Forward"]) expect(snip).toContain(p);
+  });
+  it("guards the host and the logged-out case", () => {
+    expect(snip).toContain("fantasyloi.leagueofireland.ie");
+    expect(snip).toContain("logged in");
+  });
+  it("stashes the blob for copying, with a runnable fallback", () => {
+    expect(snip).toContain("fancystatsFantasyBlob");
+    expect(snip).toContain("navigator.clipboard.writeText");
+    expect(snip).toContain("copy(fancystatsFantasyBlob)");
+    expect(snip).toContain('"fantasyloi"'); // meta.source the app validates
+  });
+  it("is syntactically valid JavaScript", () => {
+    expect(() => new Function(snip)).not.toThrow();
   });
 });
