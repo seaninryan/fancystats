@@ -15,11 +15,16 @@ describe("SettingsTab SSR", () => {
   });
   it("links out to both sites in a new tab, without leaking a referer", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
-    expect(html).toContain('href="https://www.sofascore.com/"');
+    expect(html).toContain('href="https://www.sofascore.com/football/tournament/ireland/premier-division/192#id:87682"');
     expect(html).toContain('href="https://fantasyloi.leagueofireland.ie/Stats/PlayerStats"');
     // SofaScore blocks a github.io referer, so both links must suppress it
     expect(html.match(/rel="noreferrer"/g)).toHaveLength(2);
     expect(html.match(/target="_blank"/g)).toHaveLength(2);
+  });
+  it("builds the SofaScore deep link from meta, so a new season follows automatically", () => {
+    const next = { ...data(), meta: { ...emptyData().meta, tournamentId: 192, seasonId: 99999 } };
+    const html = renderToStaticMarkup(<SettingsTab data={next} update={() => {}} />);
+    expect(html).toContain("premier-division/192#id:99999");
   });
   it("keeps the legacy paste card collapsed by default", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
