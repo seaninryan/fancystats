@@ -63,6 +63,8 @@ export default function FantasyImport({ data, update }) {
       </p>
       <div className="row">
         <button onClick={() => navigator.clipboard?.writeText(SNIPPET)}>Copy snippet</button>
+        <a className="ext" href="https://fantasyloi.leagueofireland.ie/Stats/PlayerStats"
+          target="_blank" rel="noreferrer">Open Player Stats ↗</a>
       </div>
       <textarea readOnly value={SNIPPET} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} />
       <textarea placeholder="Paste the snippet output here" value={paste} rows={4}

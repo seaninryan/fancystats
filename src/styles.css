@@ -140,3 +140,10 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 .fold[open] > summary::before { content: "▾"; }
 .fold > summary h3 { display: inline; margin: 0; }
 .fold > summary:hover h3 { color: var(--accent); }
+
+/* Links out to the sites the snippets run on — styled as buttons so they sit
+   level with Copy snippet in a .row. */
+.ext { display: inline-flex; align-items: center; gap: 4px; text-decoration: none;
+  color: inherit; background: var(--panel); border: 1px solid var(--line);
+  border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
+.ext:hover { border-color: var(--accent); color: var(--accent); }

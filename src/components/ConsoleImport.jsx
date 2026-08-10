@@ -59,6 +59,8 @@ export default function ConsoleImport({ data, update }) {
         </label>
         <label><input type="checkbox" checked={refetchAll} onChange={(e) => setRefetchAll(e.target.checked)} /> Re-fetch all (backfill)</label>
         <button onClick={() => navigator.clipboard?.writeText(snippet)} disabled={!token}>Copy snippet</button>
+        {/* rel=noreferrer matters here: a github.io Referer is blocked by SofaScore */}
+        <a className="ext" href="https://www.sofascore.com/" target="_blank" rel="noreferrer">Open SofaScore ↗</a>
       </div>
       <textarea readOnly value={snippet} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} />
       <textarea placeholder="Paste the snippet output here" value={paste} onChange={(e) => setPaste(e.target.value)} rows={4} style={{ width: "100%", fontFamily: "monospace" }} />
