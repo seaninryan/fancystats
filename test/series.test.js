@@ -4,7 +4,7 @@ import {
   emptyData, applyImport, setPlayerField, setAdjustment, setMatchRound, upsertMatchStubs,
 } from "../src/lib/store.js";
 // NOTE: import only what exists so far — Tasks 3-5 each add their function here.
-import { importedRounds, accumulate, playerWeeklySeries, teamWeeklySeries, chartRows } from "../src/lib/series.js";
+import { importedRounds, accumulate, playerWeeklySeries, teamWeeklySeries, chartRows, roundsForEvents } from "../src/lib/series.js";
 
 const NOW = 1765000000000;
 
@@ -104,6 +104,52 @@ describe("playerWeeklySeries", () => {
   it("is all null for a player with no game position", () => {
     const d = setPlayerField(fixture(), 10, "gamePosition", null);
     expect(values(playerWeeklySeries(d, 10))).toEqual([null, null, null, null]);
+  });
+});
+
+describe("playerWeeklySeries windowing", () => {
+  it("restricts the axis and values to the given rounds and event ids", () => {
+    const d = fixture();
+    // player 10 (team 1) — last two team matches are events 101 (R2) and 102 (R4)
+    const ids = new Set([101, 102]);
+    const s = playerWeeklySeries(d, 10, "fantasy", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(rounds(s)).toEqual([2, 3, 4]);
+    expect(values(s)).toEqual([3, null, 0]);
+  });
+  it("drops matches outside the window even when the round stays on the axis", () => {
+    const d = fixture();
+    const ids = new Set([100, 102]); // skip R2
+    const s = playerWeeklySeries(d, 10, "fantasy", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(rounds(s)).toEqual([1, 2, 3, 4]);
+    expect(values(s)).toEqual([9, null, null, 0]); // R2 is a gap: its match is out of window
+  });
+  it("windows count stats too", () => {
+    const d = fixture();
+    const ids = new Set([101]);
+    expect(values(playerWeeklySeries(d, 20, "assists", { eventIds: ids, rounds: roundsForEvents(d, ids) })))
+      .toEqual([1]);
+  });
+  it("cumulative over a window starts from the window", () => {
+    const d = fixture();
+    const ids = new Set([101, 102]);
+    const s = playerWeeklySeries(d, 20, "fantasy", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(values(accumulate(s))).toEqual([6, null, 5]);
+  });
+  it("an empty window yields no rounds", () => {
+    const d = fixture();
+    const ids = new Set();
+    expect(playerWeeklySeries(d, 10, "fantasy", { eventIds: ids, rounds: roundsForEvents(d, ids) })).toEqual([]);
+  });
+});
+
+describe("roundsForEvents", () => {
+  it("spans min..max round of the given events, inclusive", () => {
+    expect(roundsForEvents(fixture(), new Set([100, 102]))).toEqual([1, 2, 3, 4]);
+    expect(roundsForEvents(fixture(), new Set([101]))).toEqual([2]);
+  });
+  it("ignores unknown ids and respects roundOverride", () => {
+    expect(roundsForEvents(fixture(), new Set([999]))).toEqual([]);
+    expect(roundsForEvents(setMatchRound(fixture(), 102, 3), new Set([101, 102]))).toEqual([2, 3]);
   });
 });
 

@@ -21,6 +21,23 @@ export function importedRounds(data) {
   return Array.from({ length: max - min + 1 }, (_, i) => min + i);
 }
 
+// X-axis domain for a windowed graph: min..max round of the given event ids,
+// inclusive, so a "Last 3" view shows only those gameweeks. Unknown ids and
+// un-imported matches are ignored.
+export function roundsForEvents(data, eventIds) {
+  let min = Infinity, max = -Infinity;
+  for (const id of eventIds) {
+    const m = data.matches[id];
+    if (!m || !imported(m)) continue;
+    const r = matchRound(m);
+    if (r == null) continue;
+    if (r < min) min = r;
+    if (r > max) max = r;
+  }
+  if (min === Infinity) return [];
+  return Array.from({ length: max - min + 1 }, (_, i) => min + i);
+}
+
 // Running total for the cumulative toggle. Gaps (null) stay gaps in the line
 // but don't reset the sum.
 export function accumulate(points) {
@@ -57,8 +74,13 @@ function appearanceStat(a, m, position, adj, stat) {
 // round (gap); 0 = team played but the player contributed nothing (or didn't
 // appear). Fantasy needs a gamePosition to score (matching the Pts column's
 // ❗); the count stats don't.
-export function playerWeeklySeries(data, playerId, stat = "fantasy") {
-  const rounds = importedRounds(data);
+export function playerWeeklySeries(data, playerId, stat = "fantasy", opts = {}) {
+  // opts.eventIds: restrict to these matches (the Last 3/Last 5 window);
+  // opts.rounds: x-axis domain to use instead of the full imported span, so
+  // every windowed series shares one domain (chartRows pivots by index).
+  const { eventIds = null, rounds: domain = null } = opts;
+  const inWindow = (m) => !eventIds || eventIds.has(m.eventId);
+  const rounds = domain || importedRounds(data);
   const player = data.players[playerId];
   const position = player?.gamePosition;
   if (!player || (stat === "fantasy" && !position)) {
@@ -66,14 +88,14 @@ export function playerWeeklySeries(data, playerId, stat = "fantasy") {
   }
   const byRound = new Map();
   for (const m of Object.values(data.matches)) {
-    if (!imported(m) || (m.homeTeamId !== player.teamId && m.awayTeamId !== player.teamId)) continue;
+    if (!imported(m) || !inWindow(m) || (m.homeTeamId !== player.teamId && m.awayTeamId !== player.teamId)) continue;
     const r = matchRound(m);
     if (r != null && !byRound.has(r)) byRound.set(r, 0);
   }
   for (const a of Object.values(data.appearances)) {
     if (String(a.playerId) !== String(playerId)) continue;
     const m = data.matches[a.eventId];
-    if (!m || !imported(m)) continue;
+    if (!m || !imported(m) || !inWindow(m)) continue;
     const r = matchRound(m);
     if (r == null) continue;
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;

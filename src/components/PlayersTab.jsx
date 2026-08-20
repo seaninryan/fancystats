@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { playerTotals, appearancesByPlayer, mismatchInfo, playerOutNow, playerName, missingFantasyData, isHot, teamWindowEventIds, playerClimb } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
-import { playerWeeklySeries, PLAYER_STATS } from "../lib/series.js";
+import { playerWeeklySeries, roundsForEvents, PLAYER_STATS } from "../lib/series.js";
 import GameweekChart from "./GameweekChart.jsx";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
@@ -71,15 +71,34 @@ export default function PlayersTab({ data, update, openPlayer }) {
     });
   }, [data, win]);
 
+  // The Last 3/Last 5 filter narrows the graph too: each player keeps their own
+  // team's window (teams play at different rounds), and the shared x-axis spans
+  // the union of those windows so chartRows can pivot by index.
+  const chartWindow = useMemo(() => {
+    if (win === "all" || !selected.size) return null;
+    const windows = teamWindowEventIds(data, win);
+    const byPlayer = new Map(), union = new Set();
+    for (const id of selected) {
+      const p = data.players[id];
+      if (!p) continue;
+      const ids = windows.get(p.teamId) || new Set();
+      byPlayer.set(String(id), ids);
+      for (const e of ids) union.add(e);
+    }
+    return { byPlayer, rounds: roundsForEvents(data, union) };
+  }, [data, selected, win]);
+
   const chartSeries = useMemo(() => [...selected].flatMap((id) => {
     const p = data.players[id];
     if (!p) return [];
     return [{
       key: String(id), label: playerName(p),
       color: teamColor(data.teams[p.teamId]).bg,
-      points: playerWeeklySeries(data, id, stat),
+      points: playerWeeklySeries(data, id, stat, chartWindow
+        ? { eventIds: chartWindow.byPlayer.get(String(id)) || new Set(), rounds: chartWindow.rounds }
+        : {}),
     }];
-  }), [data, selected, stat]);
+  }), [data, selected, stat, chartWindow]);
 
   // the 📈 selection doubles as a budgeting basket
   const basket = useMemo(() => {
@@ -124,6 +143,9 @@ export default function PlayersTab({ data, update, openPlayer }) {
         {PLAYER_STATS.map(([key, label]) => (
           <button key={key} className={stat === key ? "primary" : ""} onClick={() => setStat(key)}>{label}</button>
         ))}
+        {win !== "all" && (
+          <span className="chip" title={`graph limited to each player's last ${win} team matches`}>Last {win}</span>
+        )}
         <span className={overCap ? "loss" : ""} style={{ fontWeight: 600 }}
           title={`${selected.size} selected${basket.unpriced ? ` · ${basket.unpriced} without a price (not counted)` : ""}${overCap ? ` · over by €${(basket.cost - capNum).toFixed(1)}` : ""}`}>
           Σ €{basket.cost.toFixed(1)}{capNum ? ` / €${capNum.toFixed(1)}` : ""}
