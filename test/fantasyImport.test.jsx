@@ -2,8 +2,8 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { emptyData } from "../src/lib/store.js";
-import UnmatchedLinks from "../src/components/UnmatchedLinks.jsx";
-import FantasyImport from "../src/components/FantasyImport.jsx";
+import UnmatchedLinks, { NEW_PLAYER } from "../src/components/UnmatchedLinks.jsx";
+import FantasyImport, { defaultLinks } from "../src/components/FantasyImport.jsx";
 
 const dataWithPlayers = () => ({
   ...emptyData(),
@@ -76,5 +76,19 @@ describe("FantasyImport SSR", () => {
     expect(html).toContain("Import from Fantasy LOI");
     expect(html).toContain("/Stats/PlayerStats");
     expect(html).toContain("Copy snippet");
+  });
+});
+
+describe("defaultLinks", () => {
+  it("pre-selects creation for scoreless rows with a resolved club", () => {
+    expect(defaultLinks([
+      { name: "Danny Mandroiu", teamId: "1", sitePoints: 0 },
+      { name: "No Club", teamId: null, sitePoints: 0 },
+      { name: "Has Scored", teamId: "1", sitePoints: 42 },
+      { name: "No Points Field", teamId: "1", sitePoints: null },
+    ])).toEqual({ 0: NEW_PLAYER, 3: NEW_PLAYER });
+  });
+  it("is empty when every row scored", () => {
+    expect(defaultLinks([{ name: "A", teamId: "1", sitePoints: 5 }])).toEqual({});
   });
 });
