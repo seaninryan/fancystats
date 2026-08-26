@@ -13,6 +13,7 @@ import {
   playerClimb,
   teamSitePoints,
   applyFantasyRows,
+  fantasyOnlyId,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -757,5 +758,22 @@ describe("applyFantasyRows", () => {
   });
   it("emptyData carries an empty fantasyClubMap", () => {
     expect(emptyData().meta.fantasyClubMap).toEqual({});
+  });
+});
+
+describe("fantasyOnlyId", () => {
+  it("is deterministic, colon-free and non-numeric", () => {
+    const id = fantasyOnlyId("Danny Mandroiu", 2334);
+    expect(id).toBe("fx-danny-mandroiu-2334");
+    expect(id).toBe(fantasyOnlyId("Danny Mandroiu", "2334"));
+    expect(id).not.toContain(":");
+    expect(Number.isNaN(Number(id))).toBe(true);
+  });
+  it("absorbs punctuation and case the way name matching does", () => {
+    expect(fantasyOnlyId("Se\u00e1n O'Connor", 1)).toBe(fantasyOnlyId("Sean OConnor", 1));
+  });
+  it("refuses a row with no club or no usable name", () => {
+    expect(fantasyOnlyId("Danny Mandroiu", null)).toBe(null);
+    expect(fantasyOnlyId("   ", 1)).toBe(null);
   });
 });

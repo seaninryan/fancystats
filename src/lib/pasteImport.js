@@ -79,7 +79,7 @@ export function parsePaste(text) {
   return rows;
 }
 
-function surnameInitialKey(name) {
+export function surnameInitialKey(name) {
   const parts = normalizeName(name).split(" ").filter(Boolean);
   if (parts.length < 2) return null;
   return `${parts[0][0]} ${parts[parts.length - 1]}`; // "p oconor"

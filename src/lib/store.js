@@ -1,6 +1,7 @@
 // src/lib/store.js
 // Pure operations on the fancystats.json data object. Every mutator returns a new object.
 import { scoreAppearance } from "./scoring.js";
+import { normalizeName, surnameInitialKey } from "./pasteImport.js";
 
 export const POS_MAP = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
 
@@ -534,4 +535,19 @@ export function allMatchTeamPoints(data) {
     out.set(a.eventId, t);
   }
   return out;
+}
+
+// ---- fantasy-only players ----
+// Registered players SofaScore has never seen: they've played no minutes, so they
+// appear in no lineups payload and no import can create them. Only the fantasy
+// capture knows they exist.
+
+// Deterministic id: stable across re-imports so user-owned fields stick;
+// colon-free because absence keys are `${eventId}:${playerId}` and playerOutNow
+// splits on ":"; non-numeric so Number(id) is NaN and appearance lookups find
+// nothing. No club -> no id: without a teamId we could never reconcile on debut.
+export function fantasyOnlyId(name, teamId) {
+  if (teamId == null) return null;
+  const slug = normalizeName(name || "").replace(/\s+/g, "-");
+  return slug ? `fx-${slug}-${teamId}` : null;
 }
