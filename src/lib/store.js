@@ -551,3 +551,26 @@ export function fantasyOnlyId(name, teamId) {
   const slug = normalizeName(name || "").replace(/\s+/g, "-");
   return slug ? `fx-${slug}-${teamId}` : null;
 }
+
+// rows: [{name, teamId, gamePosition, price, sitePoints}] — unmatched capture rows
+// the user chose to materialize. Rows without a resolved club are skipped. Re-running
+// refreshes the captured fields only: stars, squad, flags and a manual position are
+// user-owned, the same split re-imports honour.
+export function addFantasyOnlyPlayers(data, rows, now) {
+  const next = structuredClone(data);
+  for (const r of rows) {
+    const id = fantasyOnlyId(r.name, r.teamId);
+    if (!id) continue;
+    const p = next.players[id] || (next.players[id] = {
+      ...defaultPlayer({ name: r.name, teamId: Number(r.teamId) }),
+      fantasyOnly: true,
+    });
+    if (r.price != null) { p.price = r.price; p.priceUpdatedAt = now; }
+    if (r.sitePoints != null) p.sitePoints = r.sitePoints;
+    if (r.gamePosition && p.gamePositionSource !== "manual") {
+      p.gamePosition = r.gamePosition;
+      p.gamePositionSource = "fantasy";
+    }
+  }
+  return next;
+}

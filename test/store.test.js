@@ -13,7 +13,7 @@ import {
   playerClimb,
   teamSitePoints,
   applyFantasyRows,
-  fantasyOnlyId,
+  fantasyOnlyId, addFantasyOnlyPlayers,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -775,5 +775,44 @@ describe("fantasyOnlyId", () => {
   it("refuses a row with no club or no usable name", () => {
     expect(fantasyOnlyId("Danny Mandroiu", null)).toBe(null);
     expect(fantasyOnlyId("   ", 1)).toBe(null);
+  });
+});
+
+const GHOST_ROW = { name: "Danny Mandroiu", teamId: 1, gamePosition: "MID", price: 6.5, sitePoints: 0 };
+
+describe("addFantasyOnlyPlayers", () => {
+  it("creates a flagged record with the captured fields and default user fields", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    const p = d.players["fx-danny-mandroiu-1"];
+    expect(p).toMatchObject({
+      name: "Danny Mandroiu", teamId: 1, fantasyOnly: true,
+      gamePosition: "MID", gamePositionSource: "fantasy",
+      price: 6.5, priceUpdatedAt: NOW, sitePoints: 0,
+      starred: false, inSquad: false, customName: null,
+    });
+  });
+  it("skips a row whose club never resolved", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [{ ...GHOST_ROW, teamId: null }], NOW);
+    expect(Object.keys(d.players).filter((k) => k.startsWith("fx-"))).toEqual([]);
+  });
+  it("refreshes captured fields on re-import without touching user-owned ones", () => {
+    let d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "starred", true);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "gamePosition", "FWD"); // manual
+    d = addFantasyOnlyPlayers(d, [{ ...GHOST_ROW, price: 6.1, sitePoints: 3 }], NOW + 1);
+    const p = d.players["fx-danny-mandroiu-1"];
+    expect(p.price).toBe(6.1);
+    expect(p.priceUpdatedAt).toBe(NOW + 1);
+    expect(p.sitePoints).toBe(3);
+    expect(p.starred).toBe(true);
+    expect(p.gamePosition).toBe("FWD");
+    expect(p.gamePositionSource).toBe("manual");
+    expect(Object.keys(d.players).filter((k) => k.startsWith("fx-"))).toHaveLength(1);
+  });
+  it("does not mutate the input", () => {
+    const before = importedFixture();
+    const snapshot = JSON.stringify(before);
+    addFantasyOnlyPlayers(before, [GHOST_ROW], NOW);
+    expect(JSON.stringify(before)).toBe(snapshot);
   });
 });
