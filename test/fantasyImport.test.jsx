@@ -26,6 +26,24 @@ describe("UnmatchedLinks SSR", () => {
     expect(html).toContain("skip");
     expect(html).toContain("(BOH)");
   });
+  it("offers 'add as new player' when the row's club resolved", () => {
+    const html = renderToStaticMarkup(
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "Danny Mandroiu", teamId: "1" }]}
+        links={{}} onChange={() => {}} allowNew />);
+    expect(html).toContain("add as new player");
+  });
+  it("hides the option for a row whose club never resolved", () => {
+    const html = renderToStaticMarkup(
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "Danny Mandroiu", teamId: null }]}
+        links={{}} onChange={() => {}} allowNew />);
+    expect(html).not.toContain("add as new player");
+  });
+  it("does not offer it at all without allowNew (the paste card)", () => {
+    const html = renderToStaticMarkup(
+      <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "Danny Mandroiu", teamId: "1" }]}
+        links={{}} onChange={() => {}} />);
+    expect(html).not.toContain("add as new player");
+  });
   it("renders a header and a cell per column", () => {
     const html = renderToStaticMarkup(
       <UnmatchedLinks data={dataWithPlayers()} unmatched={[{ name: "C. Whelan", price: 8.3, gamePosition: "DEF" }]}
