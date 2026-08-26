@@ -4,7 +4,7 @@
 // user runs there; it copies a path-keyed payload blob to the clipboard; we replay
 // that blob through the existing sofascore.js pipeline via an injected fetcher.
 import { API, fetchSeasonEvents, importMatch } from "./sofascore.js";
-import { upsertMatchStubs, applyImport } from "./store.js";
+import { upsertMatchStubs, applyImport, reconcileFantasyOnly } from "./store.js";
 
 // A fetcher with the same contract as real fetch / the test stubs, but serving
 // responses from a pasted blob. Keys are path suffixes like "/event/555".
@@ -41,7 +41,9 @@ export function applyDecoded(data, decoded, now) {
   let next = upsertMatchStubs(data, decoded.stubs, decoded.teams);
   next.meta = { ...next.meta, lastEventSync: now };
   for (const r of decoded.results) next = applyImport(next, r, now);
-  return next;
+  // A batch is where real player records first appear, so a fantasy-only ghost is
+  // retired in the same update that creates its replacement — never a duplicate row.
+  return reconcileFantasyOnly(next);
 }
 
 // Returns the console snippet source. The user pastes it into a sofascore.com tab's
