@@ -450,12 +450,15 @@ export function teamSitePoints(data) {
 export function playerClimb(data, playerId, { apps = null, windowIds } = {}) {
   const player = data.players[playerId];
   if (!player?.gamePosition || !windowIds?.size) return null;
+  // Never played: a negative ± would read as a decline rather than an absence.
+  const theirApps = apps ?? playerAppearances(data, playerId);
+  if (!theirApps.length) return null;
   const prior = teamImportedMatches(data, player.teamId)
     .filter((m) => !windowIds.has(m.eventId));
   if (!prior.length) return null;
   const priorIds = new Set(prior.map((m) => m.eventId));
-  const w = playerTotals(data, playerId, { apps, eventIds: windowIds }).points ?? 0;
-  const p = playerTotals(data, playerId, { apps, eventIds: priorIds }).points ?? 0;
+  const w = playerTotals(data, playerId, { apps: theirApps, eventIds: windowIds }).points ?? 0;
+  const p = playerTotals(data, playerId, { apps: theirApps, eventIds: priorIds }).points ?? 0;
   return w / windowIds.size - p / priorIds.size;
 }
 

@@ -885,3 +885,14 @@ describe("reconcileFantasyOnly", () => {
     expect(reconcileFantasyOnly(away).players["fx-danny-mandroiu-1"]).toBeDefined();
   });
 });
+
+describe("playerClimb with no appearances", () => {
+  it("is null rather than a negative for a player who has never played", () => {
+    // TWO imported team matches, window of 1: the baseline set must be non-empty or
+    // playerClimb short-circuits to null on its own and the test proves nothing.
+    const d = addFantasyOnlyPlayers(debut(importedFixture(), 99, "Someone Else"), [GHOST_ROW], NOW);
+    const windowIds = teamWindowEventIds(d, 1).get(1);
+    expect(windowIds.size).toBe(1);
+    expect(playerClimb(d, "fx-danny-mandroiu-1", { windowIds })).toBe(null);
+  });
+});
