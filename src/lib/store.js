@@ -574,3 +574,52 @@ export function addFantasyOnlyPlayers(data, rows, now) {
   }
   return next;
 }
+
+// Copy a ghost's user-owned fields onto the real record, move its absences over,
+// then drop it. Captured fields only fill gaps — a fresher real value wins.
+function mergeGhost(next, ghostId, realId) {
+  const g = next.players[ghostId];
+  const r = next.players[realId];
+  if (g.customName) r.customName = g.customName;
+  if (g.pasteAlias) r.pasteAlias = g.pasteAlias;
+  if (g.realPosition) r.realPosition = g.realPosition;
+  if (g.starred) r.starred = true;
+  if (g.inSquad) r.inSquad = true;
+  if (g.flags?.length) r.flags = [...(r.flags || []), ...g.flags];
+  if (g.gamePositionSource === "manual") {
+    r.gamePosition = g.gamePosition;
+    r.gamePositionSource = "manual";
+  }
+  if (r.price == null && g.price != null) { r.price = g.price; r.priceUpdatedAt = g.priceUpdatedAt; }
+  if (r.sitePoints == null && g.sitePoints != null) r.sitePoints = g.sitePoints;
+  for (const [k, a] of Object.entries(next.absences || {})) {
+    const i = k.indexOf(":");
+    if (k.slice(i + 1) !== ghostId) continue;
+    delete next.absences[k];
+    next.absences[`${k.slice(0, i)}:${realId}`] = a;
+  }
+  delete next.players[ghostId];
+}
+
+// Promote ghosts whose real SofaScore record now exists: exactly one real team-mate
+// matching by exact name or by surname+initial ("D. Mandroiu" and "Danny Mandroiu"
+// share a key). Two candidates -> leave it; the capture row lands in the manual link
+// list instead. Never guess. Returns `data` untouched when nothing merged.
+export function reconcileFantasyOnly(data) {
+  const entries = Object.entries(data.players);
+  const ghosts = entries.filter(([, p]) => p.fantasyOnly);
+  if (!ghosts.length) return data;
+  const real = entries.filter(([, p]) => !p.fantasyOnly);
+  let next = null;
+  for (const [gid, g] of ghosts) {
+    const norm = normalizeName(g.name);
+    const key = surnameInitialKey(g.name);
+    const cands = real.filter(([, p]) =>
+      String(p.teamId) === String(g.teamId) &&
+      (normalizeName(p.name) === norm || (key && surnameInitialKey(p.name) === key)));
+    if (cands.length !== 1) continue;
+    next = next || structuredClone(data);
+    mergeGhost(next, gid, cands[0][0]);
+  }
+  return next || data;
+}
