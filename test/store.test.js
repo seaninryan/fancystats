@@ -896,3 +896,27 @@ describe("playerClimb with no appearances", () => {
     expect(playerClimb(d, "fx-danny-mandroiu-1", { windowIds })).toBe(null);
   });
 });
+
+describe("fantasy-only players are invisible to derived stats", () => {
+  it("leaves leagueTable, hotEventIds and allMatchTeamPoints untouched", () => {
+    const base = importedFixture();
+    const withG = addFantasyOnlyPlayers(base, [GHOST_ROW], NOW);
+    expect(leagueTable(withG)).toEqual(leagueTable(base));
+    expect(allMatchTeamPoints(withG)).toEqual(allMatchTeamPoints(base));
+    expect([...hotEventIds(withG, "fx-danny-mandroiu-1")]).toEqual([]);
+    expect(isHot(withG, "fx-danny-mandroiu-1")).toBe(false);
+  });
+  it("reports zeroed totals and no appearances", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    expect(playerAppearances(d, "fx-danny-mandroiu-1")).toEqual([]);
+    expect(playerTotals(d, "fx-danny-mandroiu-1")).toMatchObject({
+      minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: 0,
+    });
+    expect(missingFantasyData(d.players["fx-danny-mandroiu-1"], [])).toBe(false);
+    expect(mismatchInfo(d, "fx-danny-mandroiu-1")).toBe(null);
+  });
+  it("counts their site points in teamSitePoints, like the official table does", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    expect(teamSitePoints(d).get(1).withData).toBe(1);
+  });
+});
