@@ -79,8 +79,12 @@ unresolved.
 
 ## Promotion on debut
 
-A new pure function `reconcileFantasyOnly(data)` runs at the top of each fantasy
-import, before matching.
+A new pure function `reconcileFantasyOnly(data)` runs at the end of `applyDecoded`
+(`consoleImport.js`), after a SofaScore batch has been folded in. That is the exact
+moment a real player record first appears, so the ghost is retired in the same update
+that creates its replacement and a duplicate row is never visible. Running it on the
+fantasy-import side instead would leave the duplicate standing until the next price
+capture.
 
 For each `fantasyOnly` player, find real (non-`fantasyOnly`) players on the same
 `teamId` whose normalized name matches exactly, or whose `surnameInitialKey` matches.
