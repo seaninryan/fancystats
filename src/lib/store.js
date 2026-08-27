@@ -589,9 +589,15 @@ function mergeGhost(next, ghostId, realId) {
   if (g.starred) r.starred = true;
   if (g.inSquad) r.inSquad = true;
   if (g.flags?.length) r.flags = [...(r.flags || []), ...g.flags];
+  // A manual position always wins; otherwise the ghost's captured position fills a
+  // gap, so a freshly debuted player isn't left positionless (and flagged ❗) until
+  // the next price capture.
   if (g.gamePositionSource === "manual") {
     r.gamePosition = g.gamePosition;
     r.gamePositionSource = "manual";
+  } else if (r.gamePosition == null && g.gamePosition) {
+    r.gamePosition = g.gamePosition;
+    r.gamePositionSource = g.gamePositionSource;
   }
   if (r.price == null && g.price != null) { r.price = g.price; r.priceUpdatedAt = g.priceUpdatedAt; }
   if (r.sitePoints == null && g.sitePoints != null) r.sitePoints = g.sitePoints;

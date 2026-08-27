@@ -920,3 +920,22 @@ describe("fantasy-only players are invisible to derived stats", () => {
     expect(teamSitePoints(d).get(1).withData).toBe(1);
   });
 });
+
+describe("reconcileFantasyOnly position carry-over", () => {
+  it("gives the real record the ghost's captured position when it has none", () => {
+    // Regression: found against a real capture. The ghost's position is sourced
+    // "fantasy", not "manual", so the manual-only branch skipped it and a freshly
+    // debuted player showed ❗ "no fantasy data" until the next price capture.
+    const d = reconcileFantasyOnly(debut(withGhost(), 99, "Danny Mandroiu"));
+    expect(d.players["99"].gamePosition).toBe("MID");
+    expect(d.players["99"].gamePositionSource).toBe("fantasy");
+  });
+  it("never overwrites a position the real record already has", () => {
+    let d = withGhost();
+    d = applyImport(d, playedMatch(101, 1765000000000, 99, "Danny Mandroiu"), NOW);
+    d = setPlayerField(d, 99, "gamePosition", "FWD"); // manual, on the real record
+    d = reconcileFantasyOnly(d);
+    expect(d.players["99"].gamePosition).toBe("FWD");
+    expect(d.players["99"].gamePositionSource).toBe("manual");
+  });
+});

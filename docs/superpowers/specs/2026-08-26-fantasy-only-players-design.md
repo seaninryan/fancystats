@@ -93,8 +93,9 @@ That helper already exists in `pasteImport.js` and maps both "Danny Mandroiu" an
 
 - **Exactly one candidate** — merge and retire the ghost:
   - copy user-owned fields onto the real record: `starred`, `inSquad`, `flags`,
-    `customName`, `pasteAlias`, `realPosition`, and `gamePosition` (with its source)
-    only when `gamePositionSource === "manual"`;
+    `customName`, `pasteAlias`, `realPosition`, and `gamePosition`: a manual position
+    always wins, otherwise the ghost's captured position fills a gap so a freshly
+    debuted player is not left positionless (and flagged ❗) until the next capture;
   - carry `price`, `priceUpdatedAt` and `sitePoints` across only where the real record
     has none, so a fresher SofaScore-side value is never clobbered;
   - rekey every `data.absences` entry from the ghost id to the real id;
