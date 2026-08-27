@@ -128,9 +128,13 @@ Two consequences accepted deliberately:
 - `playerClimb` must return `null` for a player with no appearances instead of a
   negative number. A `±` of `−2.3` reads as a decline; the player simply is not there.
 
-**Teams tab: unchanged.** Its grid is built from appearances (`totals` keyed by
-`a.playerId`), so ghosts do not appear. Deliberate — that screen answers "who played in
-which match", and a permanently empty row per ghost is noise.
+**Teams tab: included** (revised 2026-08-27 at the user's request; originally excluded
+on the grounds that the grid answers "who played in which match"). The selected club's
+ghosts are seeded into `totals` *after* the appearance loop — so they can never
+overwrite a real player's figures — with `points: null`, which makes the existing
+"nulls sink" sort rule handle them the same way it handles any other pointless row.
+Their per-match cells fall through to the existing no-appearance branch, so they stay
+absence-markable: you can still record *why* a player hasn't featured.
 
 **Player Detail: unchanged.** It already handles zero appearances (`apps = []`,
 `deriveRealPosition` → `null`), and its absence filter uses `k.endsWith(':' + playerId)`,

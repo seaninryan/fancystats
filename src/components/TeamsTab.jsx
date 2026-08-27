@@ -120,6 +120,15 @@ export default function TeamsTab({ data, update, openPlayer }) {
     if (pts != null) t.points = (t.points ?? 0) + pts;
   }
 
+  // Registered players with no appearances at all (fantasy capture only). Seeded
+  // AFTER the loop above so they can never overwrite a real player's totals, and
+  // with points null so the existing null-sinks rule sorts them the same way it
+  // sorts any other pointless row.
+  for (const [pid, p] of Object.entries(data.players)) {
+    if (!p.fantasyOnly || String(p.teamId) !== selected || totals.has(pid)) continue;
+    totals.set(pid, { apps: 0, minutes: 0, goals: 0, assists: 0, points: null, seasonPoints: null });
+  }
+
   const playerIds = [...totals.keys()].sort((a, b) => {
     const ta = totals.get(a), tb = totals.get(b);
     const key = sort.key;
@@ -231,15 +240,16 @@ export default function TeamsTab({ data, update, openPlayer }) {
                 const hot = isHot(data, pid, playerApps);
                 const hotEvents = hotEventIds(data, pid, playerApps);
                 const siteDelta = p?.sitePoints != null && t.seasonPoints != null ? t.seasonPoints - p.sitePoints : null;
+                const ghost = !!p?.fantasyOnly;
                 return (
-                  <tr key={pid}>
+                  <tr key={pid} className={ghost ? "ghost-row" : ""}>
                     <td>
                       <span className="player-cell">
                         <button className={`mini-toggle ${p?.starred ? "" : "off"}`} aria-pressed={!!p?.starred} title="watchlist"
                           onClick={() => toggle(pid, "starred", !p?.starred)}>⭐</button>
                         <button className={`mini-toggle ${p?.inSquad ? "" : "off"}`} aria-pressed={!!p?.inSquad} title="in my squad"
                           onClick={() => toggle(pid, "inSquad", !p?.inSquad)}>🔵</button>
-                        {out ? <span title={out.note}>🚫</span> : ""}{hot ? "🔥" : ""}<a role="link" tabIndex={0} title={playerName(p)}
+                        {ghost ? <span title="hasn't played yet">💤</span> : ""}{out ? <span title={out.note}>🚫</span> : ""}{hot ? "🔥" : ""}<a role="link" tabIndex={0} title={playerName(p)}
                           style={{ cursor: "pointer", textDecoration: "underline dotted" }}
                           onClick={() => openPlayer(String(pid))}
                           onKeyDown={(e) => e.key === "Enter" && openPlayer(String(pid))}>
