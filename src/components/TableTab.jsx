@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { leagueTable, teamSitePoints } from "../lib/store.js";
-import { teamWeeklySeries, TEAM_STATS } from "../lib/series.js";
+import { leagueTable, teamSitePoints, teamWindowEventIds } from "../lib/store.js";
+import { teamWeeklySeries, TEAM_STATS, roundsForEvents } from "../lib/series.js";
 import { teamColor } from "../lib/teamColors.js";
 import GameweekChart from "./GameweekChart.jsx";
 import { TeamPill } from "./Pills.jsx";
@@ -34,15 +34,32 @@ export default function TableTab({ data }) {
     return t;
   }, [data, win, sort]);
 
+  // The Last 3/Last 5 filter narrows the graph too: each club keeps its own
+  // window (they play at different rounds), and the shared x-axis spans the
+  // union of those windows so chartRows can pivot by index.
+  const chartWindow = useMemo(() => {
+    if (win === "all" || !selected.size) return null;
+    const windows = teamWindowEventIds(data, win);
+    const byTeam = new Map(), union = new Set();
+    for (const tid of selected) {
+      const ids = windows.get(Number(tid)) || new Set();
+      byTeam.set(String(tid), ids);
+      for (const e of ids) union.add(e);
+    }
+    return { byTeam, rounds: roundsForEvents(data, union) };
+  }, [data, selected, win]);
+
   const chartSeries = useMemo(() => [...selected].flatMap((tid) => {
     const team = data.teams[tid];
     if (!team) return [];
     return [{
       key: String(tid), label: team.shortName || team.name,
       color: teamColor(team).bg,
-      points: teamWeeklySeries(data, tid, stat),
+      points: teamWeeklySeries(data, tid, stat, chartWindow
+        ? { eventIds: chartWindow.byTeam.get(String(tid)) || new Set(), rounds: chartWindow.rounds }
+        : {}),
     }];
-  }), [data, selected, stat]);
+  }), [data, selected, stat, chartWindow]);
 
   const siteTotals = useMemo(() => teamSitePoints(data), [data]);
   // cross-check is season-vs-site even when the table is windowed

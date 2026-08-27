@@ -182,6 +182,41 @@ describe("teamWeeklySeries", () => {
   });
 });
 
+describe("teamWeeklySeries windowing", () => {
+  // team 1's imported matches: 100 (R1), 101 (R2), 102 (R4)
+  it("restricts the axis and values to the given rounds and event ids", () => {
+    const d = fixture();
+    const ids = new Set([101, 102]); // the club's last two
+    const s = teamWeeklySeries(d, 1, "points", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(rounds(s)).toEqual([2, 3, 4]);
+    expect(values(s)).toEqual([1, null, 3]);
+  });
+  it("windows appearance-derived stats too", () => {
+    const d = fixture();
+    const ids = new Set([101, 102]);
+    const s = teamWeeklySeries(d, 1, "fantasy", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(values(s)).toEqual([3, null, 0]);
+  });
+  it("drops matches outside the window even when the round stays on the axis", () => {
+    const d = fixture();
+    const ids = new Set([100, 102]); // skip R2
+    const s = teamWeeklySeries(d, 1, "points", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(rounds(s)).toEqual([1, 2, 3, 4]);
+    expect(values(s)).toEqual([3, null, null, 3]); // R2 is a gap: its match is out of window
+  });
+  it("cumulative over a window starts from the window", () => {
+    const d = fixture();
+    const ids = new Set([101, 102]);
+    const s = teamWeeklySeries(d, 1, "points", { eventIds: ids, rounds: roundsForEvents(d, ids) });
+    expect(values(accumulate(s))).toEqual([1, null, 4]);
+  });
+  it("an empty window yields no rounds", () => {
+    const d = fixture();
+    const ids = new Set();
+    expect(teamWeeklySeries(d, 1, "points", { eventIds: ids, rounds: roundsForEvents(d, ids) })).toEqual([]);
+  });
+});
+
 describe("chartRows", () => {
   it("pivots series into one row per round keyed by series key", () => {
     expect(chartRows([

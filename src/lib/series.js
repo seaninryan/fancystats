@@ -116,13 +116,17 @@ const RESULT_STATS = new Set(["points", "played", "won", "drawn", "lost", "gf", 
 // One team's per-gameweek value. stat: "points" (league 3/1/0) | "played" |
 // "won" | "drawn" | "lost" | "gf" | "ga" | "fantasy" | "yellows" | "reds" |
 // "assists". Accounting mirrors leagueTable so the graph always agrees with
-// the table columns.
-export function teamWeeklySeries(data, teamId, stat) {
-  const rounds = importedRounds(data);
+// the table columns — including its Last 3/Last 5 window (see opts).
+export function teamWeeklySeries(data, teamId, stat, opts = {}) {
+  // opts.eventIds / opts.rounds: the Last 3/Last 5 window and the x-axis domain
+  // shared by every windowed series — same contract as playerWeeklySeries.
+  const { eventIds = null, rounds: domain = null } = opts;
+  const inWindow = (m) => !eventIds || eventIds.has(m.eventId);
+  const rounds = domain || importedRounds(data);
   const tid = Number(teamId);
   const byRound = new Map();
   for (const m of Object.values(data.matches)) {
-    if (!imported(m) || (m.homeTeamId !== tid && m.awayTeamId !== tid)) continue;
+    if (!imported(m) || !inWindow(m) || (m.homeTeamId !== tid && m.awayTeamId !== tid)) continue;
     const r = matchRound(m);
     if (r == null) continue;
     let v = byRound.get(r) || 0;
@@ -143,7 +147,7 @@ export function teamWeeklySeries(data, teamId, stat) {
     for (const a of Object.values(data.appearances)) {
       if (a.teamId !== tid) continue;
       const m = data.matches[a.eventId];
-      if (!m || !imported(m)) continue;
+      if (!m || !imported(m) || !inWindow(m)) continue;
       const r = matchRound(m);
       if (r == null) continue;
       const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
