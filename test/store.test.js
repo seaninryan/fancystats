@@ -13,7 +13,7 @@ import {
   playerClimb,
   teamSitePoints,
   applyFantasyRows,
-  fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly,
+  fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly, removeFantasyOnlyPlayer,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -937,5 +937,25 @@ describe("reconcileFantasyOnly position carry-over", () => {
     d = reconcileFantasyOnly(d);
     expect(d.players["99"].gamePosition).toBe("FWD");
     expect(d.players["99"].gamePositionSource).toBe("manual");
+  });
+});
+
+describe("removeFantasyOnlyPlayer", () => {
+  it("deletes a ghost and its absences", () => {
+    let d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    d = setAbsence(d, 100, "fx-danny-mandroiu-1", "injured", NOW);
+    d = removeFantasyOnlyPlayer(d, "fx-danny-mandroiu-1");
+    expect(d.players["fx-danny-mandroiu-1"]).toBeUndefined();
+    expect(getAbsence(d, 100, "fx-danny-mandroiu-1")).toBe(null);
+  });
+  it("refuses a real SofaScore player", () => {
+    const d = importedFixture();
+    expect(removeFantasyOnlyPlayer(d, 10)).toBe(d);
+    expect(removeFantasyOnlyPlayer(d, 10).players["10"]).toBeDefined();
+  });
+  it("refuses a ghost that somehow has appearances", () => {
+    let d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    d.appearances["100:fx-danny-mandroiu-1"] = { eventId: 100, playerId: "fx-danny-mandroiu-1", teamId: 1, started: true, minutes: 90, goals: 0, assists: 0, yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0 };
+    expect(removeFantasyOnlyPlayer(d, "fx-danny-mandroiu-1")).toBe(d);
   });
 });

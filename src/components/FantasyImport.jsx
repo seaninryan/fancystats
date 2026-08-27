@@ -1,20 +1,18 @@
 // src/components/FantasyImport.jsx
 import { useState } from "react";
-import { buildFantasySnippet, parseFantasyBlob, mapClubs, withTeamIds } from "../lib/fantasyImport.js";
+import { buildFantasySnippet, parseFantasyBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
 import { applyFantasyRows, addFantasyOnlyPlayers } from "../lib/store.js";
 import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
 
 const SNIPPET = buildFantasySnippet(); // no app state goes into it — build once
 
-// Rows the site shows with no points have never played, so there is no SofaScore
-// record to link them to: pre-select creation. A row that HAS scored is name drift on
-// a player we already hold — creating a ghost there would duplicate a real record, so
-// it keeps the link-or-skip default. A row with no club can't be created at all.
-export function defaultLinks(unmatched) {
+// Pre-select creation for the rows shouldCreateRow accepts; everything else keeps
+// the link-or-skip default. The rule itself lives in lib and is unit-tested there.
+export function defaultLinks(unmatched, players) {
   const links = {};
   unmatched.forEach((u, i) => {
-    if (u.teamId != null && !u.sitePoints) links[i] = NEW_PLAYER;
+    if (shouldCreateRow(u, players)) links[i] = NEW_PLAYER;
   });
   return links;
 }
@@ -27,7 +25,7 @@ export default function FantasyImport({ data, update }) {
   const buildPreview = (players, clubs, overrides) => {
     const clubMap = mapClubs(clubs, data.teams, overrides);
     const { matched, unmatched } = matchPlayers(withTeamIds(players, clubMap), data.players);
-    return { players, clubs, clubMap, matched, unmatched, links: defaultLinks(unmatched) };
+    return { players, clubs, clubMap, matched, unmatched, links: defaultLinks(unmatched, data.players) };
   };
 
   const parse = () => {

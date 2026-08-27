@@ -86,9 +86,21 @@ describe("defaultLinks", () => {
       { name: "No Club", teamId: null, sitePoints: 0 },
       { name: "Has Scored", teamId: "1", sitePoints: 42 },
       { name: "No Points Field", teamId: "1", sitePoints: null },
-    ])).toEqual({ 0: NEW_PLAYER, 3: NEW_PLAYER });
+    ], {})).toEqual({ 0: NEW_PLAYER, 3: NEW_PLAYER });
   });
   it("is empty when every row scored", () => {
-    expect(defaultLinks([{ name: "A", teamId: "1", sitePoints: 5 }])).toEqual({});
+    expect(defaultLinks([{ name: "A", teamId: "1", sitePoints: 5 }], {})).toEqual({});
+  });
+  it("does not pre-select a row a clubmate already covers", () => {
+    const players = {
+      601: { name: "Ben Mahon", teamId: 1 },
+      602: { name: "Ben Mahon", teamId: 1 },
+      603: { name: "Max Kovaleskis", teamId: 1 },
+    };
+    expect(defaultLinks([
+      { name: "Ben Mahon", teamId: "1", sitePoints: 0 },
+      { name: "Max Kovalevskis", teamId: "1", sitePoints: 0 },
+      { name: "Daniel Mandroiu", teamId: "1", sitePoints: 0 },
+    ], players)).toEqual({ 2: NEW_PLAYER });
   });
 });

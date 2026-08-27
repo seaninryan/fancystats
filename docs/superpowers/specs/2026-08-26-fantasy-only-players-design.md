@@ -67,8 +67,19 @@ already prompts the user to bind unrecognised clubs.
 `UnmatchedLinks` gains a third per-row option — **add as new player** — alongside the
 existing link targets and "skip".
 
-- **Pre-selected** for rows whose `sitePoints` is 0 or null (the existing triage rule),
-  so the first import is one click on Apply.
+- **Pre-selected** for rows whose `sitePoints` is 0 or null (the existing triage rule)
+  **unless a clubmate's name is within one edit of the row's** — so the first import is
+  one click on Apply. The veto matters because a row also goes unmatched when the name
+  is ambiguous (two SofaScore ids for one Ben Mahon, so `matchPlayers` can't choose) or
+  drifted by a character ("Kovalevskis" on the site, "Kovaleskis" on SofaScore).
+  Creating a record in either case duplicates someone we already hold. Comparison is on
+  the whole name, not the surname: "Alex Noonan" beside "Michael Noonan" is a second
+  player, "Max Kovalevskis" beside "Max Kovaleskis" is one person spelled two ways.
+  The rule is `shouldCreateRow` in `fantasyImport.js`.
+
+A wrongly created ghost is undone by `removeFantasyOnlyPlayer`, surfaced as **Remove**
+in Player Detail. It refuses any record with appearances or without `fantasyOnly`, so
+it can never delete real history.
 - **Not** pre-selected for rows with points above 0. "Unmatched but scoring" means name
   drift on a player who *has* played; inventing a ghost there would create a duplicate
   of a real record, which is the worse failure. Those rows keep today's link-or-skip

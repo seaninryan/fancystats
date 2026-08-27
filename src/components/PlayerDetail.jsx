@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, playerOutNow, mismatchInfo, playerName } from "../lib/store.js";
+import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, playerOutNow, mismatchInfo, playerName, removeFantasyOnlyPlayer } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
@@ -65,6 +65,17 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
         <button className={p.starred ? "primary" : ""} onClick={() => setField("starred", !p.starred)}>⭐ watch</button>
         <button className={p.inSquad ? "primary" : ""} onClick={() => setField("inSquad", !p.inSquad)}>🔵 in squad</button>
         <span className="dim">€{p.price ?? "?"}</span>
+        {p.fantasyOnly && (
+          <>
+            <span className="chip" title="from the fantasy site only — no SofaScore appearances yet">💤 not played</span>
+            <button style={{ marginLeft: "auto" }}
+              title="remove this fantasy-only record (use it if the capture created a duplicate of someone we already have)"
+              onClick={() => {
+                update((d) => removeFantasyOnlyPlayer(d, playerId));
+                onBack();
+              }}>Remove</button>
+          </>
+        )}
       </div>
       <div className="card row">
         <label>Display name{" "}

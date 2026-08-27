@@ -135,3 +135,43 @@ export function buildFantasySnippet() {
   }
 })();`;
 }
+
+// Within one insert/delete/substitution. Guards against surname drift between the
+// two sources ("Kovalevskis" on the fantasy site, "Kovaleskis" on SofaScore). Short
+// names are excluded: at four characters a single edit joins unrelated people.
+function withinOneEdit(a, b) {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 1) return false;
+  if (Math.min(a.length, b.length) < 5) return false;
+  let i = 0, j = 0, edits = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++edits > 1) return false;
+    if (a.length === b.length) { i++; j++; }
+    else if (a.length > b.length) i++;
+    else j++;
+  }
+  return edits + (a.length - i) + (b.length - j) <= 1;
+}
+
+// Should an unmatched capture row become a fantasy-only record?
+//
+// Zero site points means the player has never played, so no SofaScore record can
+// exist to link to — EXCEPT that a row also goes unmatched when the name is
+// ambiguous (two clubmates called Ben Mahon, so matchPlayers can't choose) or has
+// drifted by a character. Creating a record there duplicates someone who already
+// exists, which is worse than asking. So a near-identical clubmate name vetoes it
+// and the row keeps the link-or-skip default, with the Suggested list to hand.
+//
+// Compared on the WHOLE name, not the surname: "Alex Noonan" alongside "Michael
+// Noonan" is a real second player, while "Max Kovalevskis" alongside "Max
+// Kovaleskis" is one person spelled two ways.
+export function shouldCreateRow(row, players) {
+  if (row.teamId == null || row.sitePoints) return false;
+  const target = normalizeName(row.name);
+  if (!target) return false;
+  return !Object.values(players || {}).some((p) =>
+    !p.fantasyOnly &&
+    String(p.teamId) === String(row.teamId) &&
+    withinOneEdit(normalizeName(p.name), target));
+}

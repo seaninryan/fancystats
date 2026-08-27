@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet } from "../src/lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet, shouldCreateRow } from "../src/lib/fantasyImport.js";
 
 const goodBlob = () => ({
   meta: { source: "fantasyloi", capturedAt: 1770000000000, clubs: [{ id: "14420", name: "Bohemians" }] },
@@ -123,5 +123,49 @@ describe("buildFantasySnippet", () => {
   });
   it("is syntactically valid JavaScript", () => {
     expect(() => new Function(snip)).not.toThrow();
+  });
+});
+
+describe("shouldCreateRow", () => {
+  const players = {
+    // two SofaScore ids for one person — the real duplicate seen at Shamrock Rovers
+    601: { name: "Ben Mahon", teamId: 2334 },
+    602: { name: "Ben Mahon", teamId: 2334 },
+    603: { name: "Max Kovaleskis", teamId: 2334 },   // site spells it "Kovalevskis"
+    604: { name: "Michael Noonan", teamId: 2334 },
+    605: { name: "Daniel Grant", teamId: 2334 },
+    606: { name: "Daniel Cleary", teamId: 2334 },
+    607: { name: "Lee Grace", teamId: 2334 },
+    608: { name: "Ben Mahon", teamId: 9999 },        // same name, different club
+  };
+  const row = (name, over = {}) => ({ name, teamId: 2334, sitePoints: 0, ...over });
+
+  it("creates a genuinely absent player", () => {
+    expect(shouldCreateRow(row("Daniel Mandroiu"), players)).toBe(true);
+    expect(shouldCreateRow(row("Gary ONeill"), players)).toBe(true);
+    expect(shouldCreateRow(row("Lee Steacy"), players)).toBe(true);
+  });
+  it("refuses when two same-named clubmates make the row ambiguous", () => {
+    expect(shouldCreateRow(row("Ben Mahon"), players)).toBe(false);
+  });
+  it("refuses when a clubmate's name is one typo away (Kovalevskis/Kovaleskis)", () => {
+    expect(shouldCreateRow(row("Max Kovalevskis"), players)).toBe(false);
+  });
+  it("still creates a player who merely shares a surname with a clubmate", () => {
+    expect(shouldCreateRow(row("Alex Noonan"), players)).toBe(true);
+  });
+  it("still creates a player who merely shares a first name with clubmates", () => {
+    expect(shouldCreateRow(row("Daniel Mandroiu"), players)).toBe(true);
+  });
+  it("ignores a same-named player at another club", () => {
+    expect(shouldCreateRow({ name: "Ben Mahon", teamId: 9998, sitePoints: 0 }, players)).toBe(true);
+  });
+  it("refuses a row that has scored, or has no club", () => {
+    expect(shouldCreateRow(row("Daniel Mandroiu", { sitePoints: 42 }), players)).toBe(false);
+    expect(shouldCreateRow(row("Daniel Mandroiu", { teamId: null }), players)).toBe(false);
+  });
+  it("ignores existing fantasy-only records when judging ambiguity", () => {
+    const withGhost = { ...players, "fx-daniel-mandroiu-2334": { name: "Daniel Mandroiu", teamId: 2334, fantasyOnly: true } };
+    expect(shouldCreateRow(row("Daniel Mandroiu"), withGhost)).toBe(true);
   });
 });

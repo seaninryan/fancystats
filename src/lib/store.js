@@ -632,3 +632,18 @@ export function reconcileFantasyOnly(data) {
   }
   return next || data;
 }
+
+// Remove a fantasy-only record. Refuses anything with appearances or any real
+// SofaScore player: this is the undo for a wrongly-created ghost, never a way to
+// delete someone's history.
+export function removeFantasyOnlyPlayer(data, playerId) {
+  const p = data.players[playerId];
+  if (!p?.fantasyOnly) return data;
+  if (playerAppearances(data, playerId).length) return data;
+  const next = structuredClone(data);
+  delete next.players[playerId];
+  for (const k of Object.keys(next.absences || {})) {
+    if (k.slice(k.indexOf(":") + 1) === String(playerId)) delete next.absences[k];
+  }
+  return next;
+}
