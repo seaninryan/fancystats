@@ -3,7 +3,7 @@ import { API } from "../src/lib/sofascore.js";
 import { blobToFetcher } from "../src/lib/consoleImport.js";
 import { decodeBlob, applyDecoded } from "../src/lib/consoleImport.js";
 import { buildImportSnippet } from "../src/lib/consoleImport.js";
-import { emptyData } from "../src/lib/store.js";
+import { emptyData, addFantasyOnlyPlayers, fantasyOnlyId } from "../src/lib/store.js";
 import event from "./fixtures/event-ordinary.json";
 import lineups from "./fixtures/lineups-ordinary.json";
 import incidents from "./fixtures/incidents-ordinary.json";
@@ -47,6 +47,20 @@ describe("blobToFetcher", () => {
 });
 
 describe("decodeBlob + applyDecoded", () => {
+  it("retires a fantasy-only ghost when the imported match provides the real player", async () => {
+    const decoded = await decodeBlob(blobFor555());
+    const { id: realId, name: realName, teamId: realTeam } = decoded.results[0].players[0];
+    const seeded = addFantasyOnlyPlayers(emptyData(), [
+      { name: realName, teamId: realTeam, gamePosition: "MID", price: 7.2, sitePoints: 0 },
+    ], 900);
+    const ghostId = fantasyOnlyId(realName, realTeam);
+    expect(seeded.players[ghostId]).toBeDefined();
+
+    const data = applyDecoded(seeded, decoded, 1000);
+    expect(data.players[ghostId]).toBeUndefined();
+    expect(data.players[realId].price).toBe(7.2);
+  });
+
   it("imports the captured match and refreshes the stub", async () => {
     const decoded = await decodeBlob(blobFor555());
     expect(decoded.failed).toEqual([]);

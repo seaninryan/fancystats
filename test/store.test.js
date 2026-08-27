@@ -13,6 +13,7 @@ import {
   playerClimb,
   teamSitePoints,
   applyFantasyRows,
+  fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly,
 } from "../src/lib/store.js";
 
 const NOW = 1765000000000;
@@ -757,5 +758,165 @@ describe("applyFantasyRows", () => {
   });
   it("emptyData carries an empty fantasyClubMap", () => {
     expect(emptyData().meta.fantasyClubMap).toEqual({});
+  });
+});
+
+describe("fantasyOnlyId", () => {
+  it("is deterministic, colon-free and non-numeric", () => {
+    const id = fantasyOnlyId("Danny Mandroiu", 2334);
+    expect(id).toBe("fx-danny-mandroiu-2334");
+    expect(id).toBe(fantasyOnlyId("Danny Mandroiu", "2334"));
+    expect(id).not.toContain(":");
+    expect(Number.isNaN(Number(id))).toBe(true);
+  });
+  it("absorbs punctuation and case the way name matching does", () => {
+    expect(fantasyOnlyId("Se\u00e1n O'Connor", 1)).toBe(fantasyOnlyId("Sean OConnor", 1));
+  });
+  it("refuses a row with no club or no usable name", () => {
+    expect(fantasyOnlyId("Danny Mandroiu", null)).toBe(null);
+    expect(fantasyOnlyId("   ", 1)).toBe(null);
+  });
+});
+
+const GHOST_ROW = { name: "Danny Mandroiu", teamId: 1, gamePosition: "MID", price: 6.5, sitePoints: 0 };
+
+describe("addFantasyOnlyPlayers", () => {
+  it("creates a flagged record with the captured fields and default user fields", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    const p = d.players["fx-danny-mandroiu-1"];
+    expect(p).toMatchObject({
+      name: "Danny Mandroiu", teamId: 1, fantasyOnly: true,
+      gamePosition: "MID", gamePositionSource: "fantasy",
+      price: 6.5, priceUpdatedAt: NOW, sitePoints: 0,
+      starred: false, inSquad: false, customName: null,
+    });
+  });
+  it("skips a row whose club never resolved", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [{ ...GHOST_ROW, teamId: null }], NOW);
+    expect(Object.keys(d.players).filter((k) => k.startsWith("fx-"))).toEqual([]);
+  });
+  it("refreshes captured fields on re-import without touching user-owned ones", () => {
+    let d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "starred", true);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "gamePosition", "FWD"); // manual
+    d = addFantasyOnlyPlayers(d, [{ ...GHOST_ROW, price: 6.1, sitePoints: 3 }], NOW + 1);
+    const p = d.players["fx-danny-mandroiu-1"];
+    expect(p.price).toBe(6.1);
+    expect(p.priceUpdatedAt).toBe(NOW + 1);
+    expect(p.sitePoints).toBe(3);
+    expect(p.starred).toBe(true);
+    expect(p.gamePosition).toBe("FWD");
+    expect(p.gamePositionSource).toBe("manual");
+    expect(Object.keys(d.players).filter((k) => k.startsWith("fx-"))).toHaveLength(1);
+  });
+  it("does not mutate the input", () => {
+    const before = importedFixture();
+    const snapshot = JSON.stringify(before);
+    addFantasyOnlyPlayers(before, [GHOST_ROW], NOW);
+    expect(JSON.stringify(before)).toBe(snapshot);
+  });
+});
+
+// A ghost on team 1, plus the real SofaScore record arriving later.
+function withGhost(name = "Danny Mandroiu") {
+  return addFantasyOnlyPlayers(importedFixture(), [{ ...GHOST_ROW, name }], NOW);
+}
+function playedMatch(eventId, kickoff, id, name, teamId = 1) {
+  return {
+    match: {
+      eventId, round: 2, kickoff, status: "finished",
+      homeTeamId: 1, awayTeamId: 2, homeScore: 0, awayScore: 0,
+      goalTimes: { home: [], away: [] }, partial: false,
+    },
+    teams: [],
+    players: [{ id, name, teamId }],
+    appearances: [{ eventId, playerId: id, teamId, started: true, subOnMin: null, subOffMin: null, minutes: 90, positionPlayed: "M", goals: 0, assists: 0, ownGoals: 0, yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0 }],
+  };
+}
+function debut(d, id, name) {
+  return applyImport(d, playedMatch(101, 1765000000000, id, name), NOW);
+}
+
+describe("reconcileFantasyOnly", () => {
+  it("merges on an exact name match and deletes the ghost", () => {
+    const d = reconcileFantasyOnly(debut(withGhost(), 99, "Danny Mandroiu"));
+    expect(d.players["fx-danny-mandroiu-1"]).toBeUndefined();
+    expect(d.players["99"].name).toBe("Danny Mandroiu");
+  });
+  it("merges on a surname+initial match (D. Mandroiu vs Danny Mandroiu)", () => {
+    const d = reconcileFantasyOnly(debut(withGhost(), 99, "D. Mandroiu"));
+    expect(d.players["fx-danny-mandroiu-1"]).toBeUndefined();
+    expect(d.players["99"].price).toBe(6.5);
+  });
+  it("carries user-owned fields and fills only empty captured fields", () => {
+    let d = withGhost();
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "starred", true);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "inSquad", true);
+    d = setPlayerField(d, "fx-danny-mandroiu-1", "customName", "Mandroiu");
+    d = markOut(d, "fx-danny-mandroiu-1", "hamstring", NOW);
+    d = reconcileFantasyOnly(debut(d, 99, "Danny Mandroiu"));
+    const p = d.players["99"];
+    expect(p.starred).toBe(true);
+    expect(p.inSquad).toBe(true);
+    expect(p.customName).toBe("Mandroiu");
+    expect(activeFlag(p, NOW).note).toBe("hamstring");
+    expect(p.price).toBe(6.5);
+    expect(p.sitePoints).toBe(0);
+  });
+  it("rekeys absences from the ghost id to the real id", () => {
+    let d = setAbsence(withGhost(), 100, "fx-danny-mandroiu-1", "suspended", NOW);
+    d = reconcileFantasyOnly(debut(d, 99, "Danny Mandroiu"));
+    expect(getAbsence(d, 100, "fx-danny-mandroiu-1")).toBe(null);
+    expect(getAbsence(d, 100, 99).note).toBe("suspended");
+  });
+  it("refuses to guess when two real team-mates match", () => {
+    let d = debut(withGhost(), 99, "Danny Mandroiu");
+    d = applyImport(d, playedMatch(102, 1765100000000, 98, "D. Mandroiu"), NOW);
+    expect(reconcileFantasyOnly(d).players["fx-danny-mandroiu-1"]).toBeDefined();
+  });
+  it("leaves the ghost alone while nobody matches, and returns data unchanged", () => {
+    const d = withGhost();
+    expect(reconcileFantasyOnly(d)).toBe(d);
+    const other = debut(withGhost(), 99, "Someone Else");
+    expect(reconcileFantasyOnly(other).players["fx-danny-mandroiu-1"]).toBeDefined();
+  });
+  it("does not match a same-named player at a different club", () => {
+    const away = applyImport(withGhost(), playedMatch(103, 1765200000000, 97, "Danny Mandroiu", 2), NOW);
+    expect(reconcileFantasyOnly(away).players["fx-danny-mandroiu-1"]).toBeDefined();
+  });
+});
+
+describe("playerClimb with no appearances", () => {
+  it("is null rather than a negative for a player who has never played", () => {
+    // TWO imported team matches, window of 1: the baseline set must be non-empty or
+    // playerClimb short-circuits to null on its own and the test proves nothing.
+    const d = addFantasyOnlyPlayers(debut(importedFixture(), 99, "Someone Else"), [GHOST_ROW], NOW);
+    const windowIds = teamWindowEventIds(d, 1).get(1);
+    expect(windowIds.size).toBe(1);
+    expect(playerClimb(d, "fx-danny-mandroiu-1", { windowIds })).toBe(null);
+  });
+});
+
+describe("fantasy-only players are invisible to derived stats", () => {
+  it("leaves leagueTable, hotEventIds and allMatchTeamPoints untouched", () => {
+    const base = importedFixture();
+    const withG = addFantasyOnlyPlayers(base, [GHOST_ROW], NOW);
+    expect(leagueTable(withG)).toEqual(leagueTable(base));
+    expect(allMatchTeamPoints(withG)).toEqual(allMatchTeamPoints(base));
+    expect([...hotEventIds(withG, "fx-danny-mandroiu-1")]).toEqual([]);
+    expect(isHot(withG, "fx-danny-mandroiu-1")).toBe(false);
+  });
+  it("reports zeroed totals and no appearances", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    expect(playerAppearances(d, "fx-danny-mandroiu-1")).toEqual([]);
+    expect(playerTotals(d, "fx-danny-mandroiu-1")).toMatchObject({
+      minutes: 0, goals: 0, assists: 0, starts: 0, subApps: 0, points: 0,
+    });
+    expect(missingFantasyData(d.players["fx-danny-mandroiu-1"], [])).toBe(false);
+    expect(mismatchInfo(d, "fx-danny-mandroiu-1")).toBe(null);
+  });
+  it("counts their site points in teamSitePoints, like the official table does", () => {
+    const d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
+    expect(teamSitePoints(d).get(1).withData).toBe(1);
   });
 });

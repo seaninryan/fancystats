@@ -2,10 +2,22 @@
 import { useState } from "react";
 import { buildFantasySnippet, parseFantasyBlob, mapClubs, withTeamIds } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
-import { applyFantasyRows } from "../lib/store.js";
-import UnmatchedLinks from "./UnmatchedLinks.jsx";
+import { applyFantasyRows, addFantasyOnlyPlayers } from "../lib/store.js";
+import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
 
 const SNIPPET = buildFantasySnippet(); // no app state goes into it — build once
+
+// Rows the site shows with no points have never played, so there is no SofaScore
+// record to link them to: pre-select creation. A row that HAS scored is name drift on
+// a player we already hold — creating a ghost there would duplicate a real record, so
+// it keeps the link-or-skip default. A row with no club can't be created at all.
+export function defaultLinks(unmatched) {
+  const links = {};
+  unmatched.forEach((u, i) => {
+    if (u.teamId != null && !u.sitePoints) links[i] = NEW_PLAYER;
+  });
+  return links;
+}
 
 export default function FantasyImport({ data, update }) {
   const [paste, setPaste] = useState("");
@@ -15,7 +27,7 @@ export default function FantasyImport({ data, update }) {
   const buildPreview = (players, clubs, overrides) => {
     const clubMap = mapClubs(clubs, data.teams, overrides);
     const { matched, unmatched } = matchPlayers(withTeamIds(players, clubMap), data.players);
-    return { players, clubs, clubMap, matched, unmatched, links: {} };
+    return { players, clubs, clubMap, matched, unmatched, links: defaultLinks(unmatched) };
   };
 
   const parse = () => {
@@ -38,19 +50,25 @@ export default function FantasyImport({ data, update }) {
   };
 
   const apply = () => {
-    const linked = preview.unmatched
-      .map((u, i) => ({ u, pid: preview.links[i] }))
-      .filter((x) => x.pid)
+    const picks = preview.unmatched.map((u, i) => ({ u, pid: preview.links[i] }));
+    const linked = picks
+      .filter((x) => x.pid && x.pid !== NEW_PLAYER)
       .map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
+    const created = picks.filter((x) => x.pid === NEW_PLAYER).map((x) => x.u);
     const now = Date.now(); // updaters stay pure — same convention as the paste card
-    update((d) => applyFantasyRows(d, [...preview.matched, ...linked], now));
+    update((d) => {
+      const next = applyFantasyRows(d, [...preview.matched, ...linked], now);
+      return created.length ? addFantasyOnlyPlayers(next, created, now) : next;
+    });
     setPreview(null);
     setPaste("");
   };
 
   const unresolved = preview ? preview.clubs.filter((c) => !preview.clubMap[String(c.id)]) : [];
   const clubName = new Map((preview?.clubs || []).map((c) => [String(c.id), c.name]));
-  const linkCount = preview ? Object.values(preview.links).filter(Boolean).length : 0;
+  const picked = preview ? Object.values(preview.links).filter(Boolean) : [];
+  const linkCount = picked.filter((v) => v !== NEW_PLAYER).length;
+  const newCount = picked.filter((v) => v === NEW_PLAYER).length;
 
   return (
     <div className="card">
@@ -73,15 +91,16 @@ export default function FantasyImport({ data, update }) {
       <div className="row">
         <button onClick={parse} disabled={!paste.trim()}>Parse</button>
         {preview && (
-          <button className="primary" onClick={apply}>
-            Apply {preview.matched.length + linkCount} players
+          <button className="primary" onClick={apply}
+            title={newCount ? `${newCount} player(s) the site lists but SofaScore has never seen will be added` : ""}>
+            Apply {preview.matched.length + linkCount} players{newCount ? ` + ${newCount} new` : ""}
           </button>
         )}
       </div>
       {error && <div className="banner err">{error}</div>}
       {preview && (
         <div style={{ marginTop: 8 }}>
-          <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched</p>
+          <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched{newCount ? ` · ${newCount} to add as new` : ""}</p>
           {unresolved.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               <p className="dim">Unrecognised clubs — bind them once and it&rsquo;s remembered:</p>
@@ -103,6 +122,7 @@ export default function FantasyImport({ data, update }) {
             data={data}
             unmatched={preview.unmatched}
             links={preview.links}
+            allowNew
             onChange={(i, pid) => setPreview({ ...preview, links: { ...preview.links, [i]: pid } })}
             columns={[
               { label: "Pos", width: "3.5rem", value: (u) => u.gamePosition },

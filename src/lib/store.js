@@ -1,6 +1,7 @@
 // src/lib/store.js
 // Pure operations on the fancystats.json data object. Every mutator returns a new object.
 import { scoreAppearance } from "./scoring.js";
+import { normalizeName, surnameInitialKey } from "./pasteImport.js";
 
 export const POS_MAP = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
 
@@ -449,12 +450,15 @@ export function teamSitePoints(data) {
 export function playerClimb(data, playerId, { apps = null, windowIds } = {}) {
   const player = data.players[playerId];
   if (!player?.gamePosition || !windowIds?.size) return null;
+  // Never played: a negative ± would read as a decline rather than an absence.
+  const theirApps = apps ?? playerAppearances(data, playerId);
+  if (!theirApps.length) return null;
   const prior = teamImportedMatches(data, player.teamId)
     .filter((m) => !windowIds.has(m.eventId));
   if (!prior.length) return null;
   const priorIds = new Set(prior.map((m) => m.eventId));
-  const w = playerTotals(data, playerId, { apps, eventIds: windowIds }).points ?? 0;
-  const p = playerTotals(data, playerId, { apps, eventIds: priorIds }).points ?? 0;
+  const w = playerTotals(data, playerId, { apps: theirApps, eventIds: windowIds }).points ?? 0;
+  const p = playerTotals(data, playerId, { apps: theirApps, eventIds: priorIds }).points ?? 0;
   return w / windowIds.size - p / priorIds.size;
 }
 
@@ -534,4 +538,91 @@ export function allMatchTeamPoints(data) {
     out.set(a.eventId, t);
   }
   return out;
+}
+
+// ---- fantasy-only players ----
+// Registered players SofaScore has never seen: they've played no minutes, so they
+// appear in no lineups payload and no import can create them. Only the fantasy
+// capture knows they exist.
+
+// Deterministic id: stable across re-imports so user-owned fields stick;
+// colon-free because absence keys are `${eventId}:${playerId}` and playerOutNow
+// splits on ":"; non-numeric so Number(id) is NaN and appearance lookups find
+// nothing. No club -> no id: without a teamId we could never reconcile on debut.
+export function fantasyOnlyId(name, teamId) {
+  if (teamId == null) return null;
+  const slug = normalizeName(name || "").replace(/\s+/g, "-");
+  return slug ? `fx-${slug}-${teamId}` : null;
+}
+
+// rows: [{name, teamId, gamePosition, price, sitePoints}] — unmatched capture rows
+// the user chose to materialize. Rows without a resolved club are skipped. Re-running
+// refreshes the captured fields only: stars, squad, flags and a manual position are
+// user-owned, the same split re-imports honour.
+export function addFantasyOnlyPlayers(data, rows, now) {
+  const next = structuredClone(data);
+  for (const r of rows) {
+    const id = fantasyOnlyId(r.name, r.teamId);
+    if (!id) continue;
+    const p = next.players[id] || (next.players[id] = {
+      ...defaultPlayer({ name: r.name, teamId: Number(r.teamId) }),
+      fantasyOnly: true,
+    });
+    if (r.price != null) { p.price = r.price; p.priceUpdatedAt = now; }
+    if (r.sitePoints != null) p.sitePoints = r.sitePoints;
+    if (r.gamePosition && p.gamePositionSource !== "manual") {
+      p.gamePosition = r.gamePosition;
+      p.gamePositionSource = "fantasy";
+    }
+  }
+  return next;
+}
+
+// Copy a ghost's user-owned fields onto the real record, move its absences over,
+// then drop it. Captured fields only fill gaps — a fresher real value wins.
+function mergeGhost(next, ghostId, realId) {
+  const g = next.players[ghostId];
+  const r = next.players[realId];
+  if (g.customName) r.customName = g.customName;
+  if (g.pasteAlias) r.pasteAlias = g.pasteAlias;
+  if (g.realPosition) r.realPosition = g.realPosition;
+  if (g.starred) r.starred = true;
+  if (g.inSquad) r.inSquad = true;
+  if (g.flags?.length) r.flags = [...(r.flags || []), ...g.flags];
+  if (g.gamePositionSource === "manual") {
+    r.gamePosition = g.gamePosition;
+    r.gamePositionSource = "manual";
+  }
+  if (r.price == null && g.price != null) { r.price = g.price; r.priceUpdatedAt = g.priceUpdatedAt; }
+  if (r.sitePoints == null && g.sitePoints != null) r.sitePoints = g.sitePoints;
+  for (const [k, a] of Object.entries(next.absences || {})) {
+    const i = k.indexOf(":");
+    if (k.slice(i + 1) !== ghostId) continue;
+    delete next.absences[k];
+    next.absences[`${k.slice(0, i)}:${realId}`] = a;
+  }
+  delete next.players[ghostId];
+}
+
+// Promote ghosts whose real SofaScore record now exists: exactly one real team-mate
+// matching by exact name or by surname+initial ("D. Mandroiu" and "Danny Mandroiu"
+// share a key). Two candidates -> leave it; the capture row lands in the manual link
+// list instead. Never guess. Returns `data` untouched when nothing merged.
+export function reconcileFantasyOnly(data) {
+  const entries = Object.entries(data.players);
+  const ghosts = entries.filter(([, p]) => p.fantasyOnly);
+  if (!ghosts.length) return data;
+  const real = entries.filter(([, p]) => !p.fantasyOnly);
+  let next = null;
+  for (const [gid, g] of ghosts) {
+    const norm = normalizeName(g.name);
+    const key = surnameInitialKey(g.name);
+    const cands = real.filter(([, p]) =>
+      String(p.teamId) === String(g.teamId) &&
+      (normalizeName(p.name) === norm || (key && surnameInitialKey(p.name) === key)));
+    if (cands.length !== 1) continue;
+    next = next || structuredClone(data);
+    mergeGhost(next, gid, cands[0][0]);
+  }
+  return next || data;
 }

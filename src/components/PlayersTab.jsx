@@ -57,6 +57,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
         pos: p.gamePosition || "—",
         posRaw: p.gamePosition,
         err: missingFantasyData(p, apps),
+        ghost: !!p.fantasyOnly,
         price: p.price, starred: p.starred, inSquad: p.inSquad,
         mi: mismatchInfo(data, id, apps), out: playerOutNow(data, id),
         hot: isHot(data, id, apps),
@@ -196,12 +197,13 @@ export default function PlayersTab({ data, update, openPlayer }) {
           <tbody>
             {shown.map((r) => (
               <tr key={r.id} onClick={() => toggleSelected(r.id)}
-                className={selected.has(r.id) ? "selected" : ""} style={{ cursor: "pointer" }}>
+                className={`${selected.has(r.id) ? "selected" : ""}${r.ghost ? " ghost-row" : ""}`.trim()}
+                style={{ cursor: "pointer" }}>
                 <td className="cell-click" title="open player details"
                   onClick={(e) => { e.stopPropagation(); openPlayer(r.id); }}>
                   <button className={`mini-toggle ${selected.has(r.id) ? "" : "off"}`} aria-pressed={selected.has(r.id)}
                     title="add to graph" onClick={(e) => { e.stopPropagation(); toggleSelected(r.id); }}>📈</button>
-                  {" "}{r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}<span style={{ textDecoration: "underline dotted" }}>{r.name}</span></td>
+                  {" "}{r.ghost ? <span title="hasn't played yet">💤 </span> : ""}{r.hot ? "🔥 " : ""}{r.starred ? "⭐ " : ""}{r.inSquad ? "🔵 " : ""}{r.out ? <span title={r.out.note}>🚫 </span> : ""}<span style={{ textDecoration: "underline dotted" }}>{r.name}</span></td>
                 <td><span className="chip" style={{ background: teamColor(r.team).bg, color: teamColor(r.team).fg }}>{r.teamName}</span></td>
                 <td><PosPill pos={r.posRaw} /> <MismatchMark mi={r.mi} /></td>
                 <td>{r.price ?? "—"}</td>

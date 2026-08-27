@@ -7,7 +7,11 @@
 // suggestions.
 import { suggestLinks } from "../lib/pasteImport.js";
 
-export default function UnmatchedLinks({ data, unmatched, links, onChange, columns = [] }) {
+// Sentinel select value meaning "materialize this row as a fantasy-only player".
+// Not a player id, and no real id can collide with it.
+export const NEW_PLAYER = "__new__";
+
+export default function UnmatchedLinks({ data, unmatched, links, onChange, columns = [], allowNew = false }) {
   const label = (p) => `${p.customName || p.name} (${data.teams[p.teamId]?.shortName})`;
   if (!unmatched.length) return null;
   return (
@@ -31,6 +35,9 @@ export default function UnmatchedLinks({ data, unmatched, links, onChange, colum
             <select className="link-pick" value={links[i] || ""}
               onChange={(e) => onChange(i, e.target.value || undefined)}>
               <option value="">skip</option>
+              {allowNew && u.teamId != null && (
+                <option value={NEW_PLAYER}>➕ add as new player</option>
+              )}
               {sugg.length > 0 && (
                 <optgroup label="Suggested">
                   {sugg.map((id) => <option key={id} value={id}>{label(data.players[id])}</option>)}

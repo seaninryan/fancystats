@@ -30,6 +30,7 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .cell-off { color: var(--warn); }
 .cell-on { color: #2563b8; }
 .cell-out { opacity: .4; }
+.ghost-row td { opacity: .55; } /* registered but never played */
 .mini-toggle { padding: 4px 8px; font-size: 14px; border-radius: 6px; }
 .mini-toggle.off { opacity: .35; }
 .sticky-col th:first-child, .sticky-col td:first-child {
