@@ -149,6 +149,28 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
   border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
 .ext:hover { border-color: var(--accent); color: var(--accent); }
 
+/* Matches tab fixture rows: a mirrored fixture with the controls on the right.
+   Equal 1fr side columns put the score column at the same x on every row, so a
+   round reads as a column; the two auto columns get a min-width so a played row
+   and an upcoming one still line up. */
+.fixture { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 8px; align-items: center; }
+.fx-side { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.fx-home { justify-content: flex-end; }   /* club name outermost, chips inward */
+.fx-away { justify-content: flex-start; }
+.fx-score { min-width: 3em; text-align: center; white-space: nowrap; color: var(--dim);
+  font-variant-numeric: tabular-nums; }
+.fx-meta { display: flex; align-items: center; justify-content: flex-end; gap: 6px;
+  flex-wrap: wrap; min-width: 15em; }
+/* a slot of its own, so "✓" and "not imported" leave the column the same width */
+.fx-status { min-width: 5.5em; text-align: right; }
+@media (max-width: 600px) {
+  /* no room for four columns — stack them, centred */
+  .fixture { grid-template-columns: 1fr; }
+  .fx-home, .fx-away, .fx-meta { justify-content: center; }
+  .fx-meta { min-width: 0; }
+  .fx-status { min-width: 0; text-align: center; }
+}
+
 /* fixture comparison chips (Matches tab, upcoming fixtures) */
 .cmp-chips { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
 .cmp-chips .chip { background: var(--bg); color: var(--dim); border: 1px solid var(--line); }
