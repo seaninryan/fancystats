@@ -15,31 +15,60 @@ const teamLabel = (t) => (
 );
 
 const ORD = ["th", "st", "nd", "rd"];
+// A rank can be absent — a club drops out of a form table when its recent
+// imported matches all have null scores — and "—" is the spec's rendering.
 const ord = (n) => {
   if (n == null) return "—";
   const v = n % 100;
   return `${n}${ORD[(v - 20) % 10] || ORD[v] || ORD[0]}`;
 };
 
+const rankLabel = (n) => (n == null ? "—" : n);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const signed = (n, digits = 0) => (n >= 0 ? "+" : "") + n.toFixed(digits);
-
-// Green when this side leads the metric, dimmed when it trails, plain when level.
-const cmpCls = (mine, theirs, lowerIsBetter = false) => {
-  if (mine === theirs) return "";
-  const better = lowerIsBetter ? mine < theirs : mine > theirs;
-  return better ? " cmp-up" : " cmp-down";
+// Rounds before taking the sign so a delta of -0.004 reads "+0.00", not "-0.00".
+const signed = (n, digits = 0) => {
+  const r = Number(n.toFixed(digits)) + 0;
+  return (r >= 0 ? "+" : "") + r.toFixed(digits);
 };
 
-const gapWords = (mine, theirs, oppName) => {
-  const d = theirs - mine; // positions: lower is better
-  if (d === 0) return `level with ${oppName}`;
+// Tint straight from lib's verdict on who leads the metric: +1 leads, -1 trails,
+// 0 level or no data. Never re-derive a direction here — a locally computed
+// polarity can disagree with the score the 🎯 tag was graded from.
+const leadCls = (lead) => (lead > 0 ? " cmp-up" : lead < 0 ? " cmp-down" : "");
+
+// Position wording reads off the *scored* ranks, which is what the tint came
+// from: two clubs the table cannot separate share a scored rank while their
+// displayed positions differ, and "level" has to mean what the colour means.
+const posWords = (side, opp, oppName) => {
+  const d = opp.scored.pos - side.scored.pos; // a lower position is better
+  if (d === 0) return `level with ${oppName} on the table's tiebreakers`;
   return `${plural(Math.abs(d), "place")} ${d > 0 ? "better" : "worse"} than ${oppName}`;
 };
 
-// Level clubs read as "level with X" rather than a bare "+0".
-const deltaWords = (mine, theirs, oppName, digits = 0) =>
-  mine === theirs ? `level with ${oppName}` : `${signed(mine - theirs, digits)} vs ${oppName}`;
+// "+0" is never the truth about two level clubs.
+const deltaWords = (mine, theirs, oppName, digits = 0, suffix = "") => {
+  const d = Number((mine - theirs).toFixed(digits));
+  return d === 0 ? `level with ${oppName}` : `${signed(d, digits)}${suffix} vs ${oppName}`;
+};
+
+const formPhrase = (n, window) =>
+  n == null ? `unranked over last ${window}` : `${ord(n)} over last ${window}`;
+
+// Says the data is missing rather than implying a rank the club does not have.
+const formTitle = (side, opp, oppName) => {
+  const mine = side.form3 == null && side.form5 == null
+    ? "form: no ranked matches in the last 3 or 5"
+    : `form: ${formPhrase(side.form3, 3)}, ${formPhrase(side.form5, 5)}`;
+  return `${mine} (${oppName} ${ord(opp.form3)} / ${ord(opp.form5)})`;
+};
+
+// leagueTable only accrues fantasy points for players with a gamePosition, so a
+// zero total is a data gap, not a weakness: lib suppresses the metric and both
+// chips go neutral, so the tooltip must not present 0 as a real value.
+const fantasyTitle = (side, opp, oppName) =>
+  side.fantasy === 0 || opp.fantasy === 0
+    ? "no fantasy points recorded yet (needs positions set)"
+    : `${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fpg, opp.fpg, oppName, 1, "/game")}`;
 
 // Team pill that navigates to the club on the Teams tab.
 function TeamLink({ team, teamId, openTeam }) {
@@ -54,24 +83,23 @@ function TeamLink({ team, teamId, openTeam }) {
 }
 
 // One side's four chips, plus the 🎯 tag when this is the favoured club.
+// Values are lib's; the only job here is wording and tint.
 function SideChips({ side, opp, oppName, tag, tagTitle }) {
   return (
     <span className="cmp-chips">
       {tag && <span className="chip cmp-tag" title={tagTitle}>{tag}</span>}
-      <span className={`chip${cmpCls(side.pos, opp.pos, true)}`}
-        title={`league position ${ord(side.pos)} of ${side.teamCount} — ${gapWords(side.pos, opp.pos, oppName)}`}>
+      <span className={`chip${leadCls(side.lead.pos)}`}
+        title={`league position ${ord(side.pos)} of ${side.teamCount} — ${posWords(side, opp, oppName)}`}>
         {ord(side.pos)}
       </span>
-      <span className={`chip${cmpCls(side.points, opp.points)}`}
-        title={`${plural(side.points, "pt")} from ${plural(side.played, "game")} (${side.ppg.toFixed(2)}/game) — ${deltaWords(side.points, opp.points, oppName)}`}>
+      <span className={`chip${leadCls(side.lead.points)}`}
+        title={`${side.ppg.toFixed(2)} pts/game — ${deltaWords(side.ppg, opp.ppg, oppName, 2, "/game")}; ${plural(side.points, "pt")} from ${plural(side.played, "game")}`}>
         {side.points}
       </span>
-      <span className={`chip${cmpCls((side.form3 + side.form5) / 2, (opp.form3 + opp.form5) / 2, true)}`}
-        title={`form: ${ord(side.form3)} over last 3, ${ord(side.form5)} over last 5 (${oppName} ${ord(opp.form3)} / ${ord(opp.form5)})`}>
-        F {side.form3}/{side.form5}
+      <span className={`chip${leadCls(side.lead.form)}`} title={formTitle(side, opp, oppName)}>
+        F {rankLabel(side.form3)}/{rankLabel(side.form5)}
       </span>
-      <span className={`chip${cmpCls(side.fantasy, opp.fantasy)}`}
-        title={`${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fantasy, opp.fantasy, oppName)}`}>
+      <span className={`chip${leadCls(side.lead.fantasy)}`} title={fantasyTitle(side, opp, oppName)}>
         {side.fantasy}F
       </span>
     </span>
