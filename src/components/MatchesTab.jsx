@@ -41,6 +41,18 @@ const gapWords = (mine, theirs, oppName) => {
 const deltaWords = (mine, theirs, oppName, digits = 0) =>
   mine === theirs ? `level with ${oppName}` : `${signed(mine - theirs, digits)} vs ${oppName}`;
 
+// Team pill that navigates to the club on the Teams tab.
+function TeamLink({ team, teamId, openTeam }) {
+  return (
+    <a role="link" tabIndex={0} title={`${team?.name ?? "team"} — open on the Teams tab`}
+      style={{ cursor: "pointer", textDecoration: "underline dotted" }}
+      onClick={() => openTeam?.(String(teamId))}
+      onKeyDown={(e) => e.key === "Enter" && openTeam?.(String(teamId))}>
+      <TeamPill team={team} label={teamLabel(team)} />
+    </a>
+  );
+}
+
 // One side's four chips, plus the 🎯 tag when this is the favoured club.
 function SideChips({ side, opp, oppName, tag, tagTitle }) {
   return (
@@ -66,7 +78,7 @@ function SideChips({ side, opp, oppName, tag, tagTitle }) {
   );
 }
 
-export default function MatchesTab({ data, update }) {
+export default function MatchesTab({ data, update, openTeam }) {
   const currentRef = useRef(null);
 
   const all = Object.values(data.matches);
@@ -126,7 +138,7 @@ export default function MatchesTab({ data, update }) {
             return (
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
-                <TeamPill team={data.teams[m.homeTeamId]} label={teamLabel(data.teams[m.homeTeamId])} />
+                <TeamLink team={data.teams[m.homeTeamId]} teamId={m.homeTeamId} openTeam={openTeam} />
                 {teamPts.has(m.eventId) && <> <PtsPill pts={teamPts.get(m.eventId).home} /></>}
                 {cmp && <> <SideChips side={cmp.home} opp={cmp.away} oppName={awayName}
                   tag={favHome ? cmp.favoured.tag : null} tagTitle={tagTitle} /></>}
@@ -134,7 +146,7 @@ export default function MatchesTab({ data, update }) {
                 {cmp && <><SideChips side={cmp.away} opp={cmp.home} oppName={homeName}
                   tag={favAway ? cmp.favoured.tag : null} tagTitle={tagTitle} /> </>}
                 {teamPts.has(m.eventId) && <><PtsPill pts={teamPts.get(m.eventId).away} /> </>}
-                <TeamPill team={data.teams[m.awayTeamId]} label={teamLabel(data.teams[m.awayTeamId])} />
+                <TeamLink team={data.teams[m.awayTeamId]} teamId={m.awayTeamId} openTeam={openTeam} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
                 {suspects.has(m.eventId) && (
                   <span className="loss" title={`date suggests Round ${suspects.get(m.eventId)} — use the selector to move it`}> ⚠R{suspects.get(m.eventId)}?</span>

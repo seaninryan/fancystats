@@ -49,3 +49,27 @@ describe("TeamsTab SSR", () => {
     expect(html).not.toContain("ghost-row");
   });
 });
+
+describe("TeamsTab focusTeam", () => {
+  it("renders the focused club rather than the first alphabetically", () => {
+    const html = renderToStaticMarkup(
+      <TeamsTab data={dataForTeam()} update={() => {}} openPlayer={() => {}}
+        focusTeam={{ teamId: "2", nonce: 1 }} />,
+    );
+    expect(html).toContain("Daniel Mandroiu");   // Shamrock Rovers' squad
+    expect(html).not.toContain("Graham Burke");  // Bohemians' — not selected
+  });
+
+  it("still defaults to the first club when no focusTeam is given", () => {
+    const html = renderToStaticMarkup(
+      <TeamsTab data={dataForTeam()} update={() => {}} openPlayer={() => {}} />);
+    expect(html).toContain("Graham Burke");
+  });
+
+  it("ignores a focusTeam for a club that is not in the save", () => {
+    const html = renderToStaticMarkup(
+      <TeamsTab data={dataForTeam()} update={() => {}} openPlayer={() => {}}
+        focusTeam={{ teamId: "999", nonce: 1 }} />);
+    expect(html).toContain("Graham Burke");      // falls back to the default club
+  });
+});

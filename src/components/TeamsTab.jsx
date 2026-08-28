@@ -60,10 +60,18 @@ function AbsenceBar({ ctx, existing, defaultNote, onSave, onClear, onClose }) {
   );
 }
 
-export default function TeamsTab({ data, update, openPlayer }) {
+export default function TeamsTab({ data, update, openPlayer, focusTeam }) {
   const teamIds = Object.keys(data.teams)
     .sort((a, b) => data.teams[a].name.localeCompare(data.teams[b].name));
-  const [teamId, setTeamId] = useState(teamIds[0] || null);
+  const [teamId, setTeamId] = useState(
+    (focusTeam?.teamId && data.teams[focusTeam.teamId] ? String(focusTeam.teamId) : null) || teamIds[0] || null,
+  );
+  // Arriving from a team link elsewhere in the app. Keyed on the nonce so
+  // clicking the same club twice still re-focuses, and so the user's own
+  // dropdown choice is never fought over on unrelated re-renders.
+  useEffect(() => {
+    if (focusTeam?.teamId && data.teams[focusTeam.teamId]) setTeamId(String(focusTeam.teamId));
+  }, [focusTeam?.nonce]);
   const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "apps", dir: -1 });
   const [absEdit, setAbsEdit] = useState(null); // { eventId, pid }

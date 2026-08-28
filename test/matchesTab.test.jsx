@@ -78,7 +78,7 @@ describe("MatchesTab fixture comparison", () => {
     expect(html).not.toContain("cmp-chips");
   });
 
-  it.skip("renders team names as links", () => {
+  it("renders team names as links", () => {
     const html = render(seeded());
     expect(html).toContain('role="link"');
     expect(html).toContain("Shelbourne");

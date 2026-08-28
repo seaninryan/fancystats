@@ -25,6 +25,7 @@ export default function App() {
   const [saveState, setSaveState] = useState("idle"); // idle | saving | error
   const [authExpired, setAuthExpired] = useState(false);
   const [openPlayerId, setOpenPlayerId] = useState(null);
+  const [focusTeam, setFocusTeam] = useState(null); // { teamId, nonce } — set by team links
   const dirtyRef = useRef(false);
 
   useEffect(() => {
@@ -58,6 +59,13 @@ export default function App() {
       if (ok) setAuthExpired(false);
     });
   }, [data]);
+
+  const openTeam = useCallback((teamId) => {
+    setFocusTeam((f) => ({ teamId: String(teamId), nonce: (f?.nonce ?? 0) + 1 }));
+    setOpenPlayerId(null);
+    setTab("teams");
+    window.scrollTo({ top: 0 });
+  }, []);
 
   const handleSignIn = async () => {
     if (!(await signIn())) return;
@@ -117,7 +125,7 @@ export default function App() {
         )}
         {/* keep the tab mounted while a player is open so filters/sort survive the round-trip */}
         <div style={{ display: openPlayerId && data.players[openPlayerId] ? "none" : undefined }}>
-          <Active data={data} update={update} openPlayer={setOpenPlayerId} />
+          <Active data={data} update={update} openPlayer={setOpenPlayerId} openTeam={openTeam} focusTeam={focusTeam} />
         </div>
       </main>
     </div>
