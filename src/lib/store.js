@@ -462,9 +462,15 @@ export function playerClimb(data, playerId, { apps = null, windowIds } = {}) {
   return w / windowIds.size - p / priorIds.size;
 }
 
+// The league's own ordering: points, then goal difference, then goals scored.
+// Exported because levelness ("these two clubs cannot be separated") must be
+// asked of this comparator rather than restated — see fixtures.js.
+export const leagueOrder = (x, y) =>
+  y.points - x.points || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf;
+
 // League table over imported matches. win = null (all) or N (each club's last
-// N imported games, same window the rest of the app uses). League order:
-// points, then goal difference, then goals scored.
+// N imported games, same window the rest of the app uses), sorted by
+// `leagueOrder`.
 export function leagueTable(data, win = null) {
   const windows = win ? teamWindowEventIds(data, win) : null;
   const rows = new Map();
@@ -514,9 +520,7 @@ export function leagueTable(data, win = null) {
     const p = data.players[a.playerId];
     if (p?.gamePosition) r.fantasy += scoreAppearance(a, m, p.gamePosition, adj).total;
   }
-  return [...rows.values()].sort(
-    (x, y) => y.points - x.points || (y.gf - y.ga) - (x.gf - x.ga) || y.gf - x.gf,
-  );
+  return [...rows.values()].sort(leagueOrder);
 }
 
 // One pass over all appearances: eventId -> { home, away } fantasy-point sums.

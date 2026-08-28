@@ -8,7 +8,7 @@ import {
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
   setAbsence, getAbsence, playerOutNow,
-  teamWindowEventIds, leagueTable,
+  teamWindowEventIds, leagueTable, leagueOrder,
   hotEventIds,
   playerClimb,
   teamSitePoints,
@@ -552,6 +552,45 @@ describe("leagueTable", () => {
   it("respects the window (team's last N imported matches)", () => {
     const t1 = leagueTable(withSecondMatch(), 1).find((r) => r.teamId === 1);
     expect(t1).toMatchObject({ played: 1, gf: 2, ga: 2, points: 1 }); // only match 101
+  });
+  // Two clubs level on points but split by goal difference, imported in the
+  // order a points-only sort would leave them in — so the table's row order can
+  // only come out right if it really is `leagueOrder` doing the sorting.
+  const tiebreakFixture = () => {
+    let d = emptyData();
+    for (const [eventId, home, away, hs, as] of [[200, 3, 4, 1, 0], [201, 5, 6, 3, 0]]) {
+      d = applyImport(d, {
+        match: {
+          eventId, round: 1, kickoff: 1764900000000 + eventId, status: "finished",
+          homeTeamId: home, awayTeamId: away, homeScore: hs, awayScore: as,
+          goalTimes: { home: [], away: [] }, partial: false,
+        },
+        teams: [3, 4, 5, 6].map((id) => ({ id, name: `C${id}`, shortName: `C${id}` })),
+        players: [], appearances: [],
+      }, NOW);
+    }
+    return d;
+  };
+  it("sorts by leagueOrder, which is therefore the only place levelness is defined", () => {
+    const rows = leagueTable(tiebreakFixture(), null);
+    // C5 (3 pts, +3) ahead of C3 (3 pts, +1); C4 (-1) ahead of C6 (-3).
+    expect(rows.map((r) => r.teamId)).toEqual([5, 3, 4, 6]);
+    for (let i = 1; i < rows.length; i++) expect(leagueOrder(rows[i - 1], rows[i])).toBeLessThan(0);
+    expect([...rows].reverse().sort(leagueOrder)).toEqual(rows);
+  });
+});
+
+describe("leagueOrder", () => {
+  const row = (points, gf, ga) => ({ points, gf, ga });
+  it("ranks on points, then goal difference, then goals scored", () => {
+    expect(leagueOrder(row(9, 5, 5), row(8, 9, 0))).toBeLessThan(0);    // points first
+    expect(leagueOrder(row(8, 9, 0), row(8, 4, 0))).toBeLessThan(0);    // then difference
+    expect(leagueOrder(row(8, 6, 2), row(8, 5, 1))).toBeLessThan(0);    // then goals scored
+    expect(leagueOrder(row(8, 5, 1), row(8, 6, 2))).toBeGreaterThan(0);
+  });
+  it("returns 0 only for clubs it cannot separate", () => {
+    expect(leagueOrder(row(8, 5, 1), row(8, 5, 1))).toBe(0);
+    expect(leagueOrder(row(8, 5, 1), row(8, 6, 2))).not.toBe(0); // same difference, more goals
   });
 });
 
