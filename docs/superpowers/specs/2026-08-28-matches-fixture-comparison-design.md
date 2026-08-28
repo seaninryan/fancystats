@@ -62,9 +62,14 @@ Weighted, graded, and explainable. For a fixture, from the perspective of one
 side, each metric becomes a signed gap, range-normalised against the league's own
 spread for that metric and clamped to ±1:
 
-- **table position** — weight 0.30. Gap = `oppPos - myPos`, normalised by
-  `teamCount - 1`.
-- **league points per game** — weight 0.20.
+- **table position** — weight 0.20. Gap = `oppPos - myPos`, normalised by
+  `teamCount - 1`. Weight 0.20 rather than 0.30 because league position ranks on
+  *total* points: a club with games in hand sits artificially low, and at 0.30
+  the position and form components together outvoted the two per-game metrics
+  badly enough to score the genuinely stronger side negative (6 pts from 2 games
+  hosting 8 pts from 4). Form is not affected — inside a last-3/last-5 window
+  clubs have played the same number of games by construction.
+- **league points per game** — weight 0.30.
 - **form** — weight 0.30. Mean of the last-3 and last-5 position gaps, each
   normalised by `teamCount - 1` over that window's table.
 - **fantasy points per game** — weight 0.20.
@@ -74,10 +79,33 @@ mis-rated. Range normalisation for the two per-game metrics: divide the gap by
 `max - min` of that metric across the league table; when the spread is 0 the
 component is 0.
 
-Every club with at least one imported match appears in all three tables
-(`teamWindowEventIds` takes the last N of each club's *own* matches), so the
-three position maps always cover both sides of a comparable fixture. Each
-window's `teamCount` comes from that window's own table.
+Each window's `teamCount` comes from that window's own table.
+
+**A club in the all-time table can be missing from a form table.**
+`teamWindowEventIds` filters only on `m.importedAt && m.goalTimes`, but
+`leagueTable` additionally skips matches with a null score — and
+`normalize()` writes `homeScore: null` for an imported-but-unplayed event. So a
+club whose last N imported matches are all null-scored drops out of
+`leagueTable(data, N)` while staying in the all-time table. A missing form rank
+is therefore `null`, not an error: the form component contributes 0 (the same
+"no signal" rule as a zero spread) and the form chip renders `F —/—`. Never
+subtract an absent rank — that was the NaN that silently suppressed the whole
+tag.
+
+**Two rankings, two jobs.** The *displayed* position is the dense table index
+(`i + 1`) — identical to what the Table tab renders, so the two tabs can never
+contradict each other. The *scored* gap uses shared ranks: clubs that
+`leagueTable`'s own ordering cannot separate count as level, so a fixture between
+genuinely level clubs reads as a zero gap instead of an arbitrary one place. That
+ordering lives in exactly one place — `leagueOrder` exported from `store.js`,
+which `leagueTable` sorts with and `fixtures.js` tests for equality. Never
+restate the tiebreakers.
+
+**Fantasy coverage is not a signal.** `leagueTable` only accrues fantasy points
+for players with a `gamePosition` set, so a club whose squad has no positions
+yet reads as the league's worst on a metric carrying weight 0.20 — a data gap
+dressed up as form. When either club's fantasy total is 0, the fantasy component
+contributes 0 and both fantasy chips render neutral, tooltipped as missing data.
 
 `score` = the weighted sum ∈ [−1, 1] from the home side's perspective. The
 favoured side is the positive one. Grades on `|score|`:
@@ -121,8 +149,19 @@ tints in `src/styles.css`.
 - `test/fixtures.test.js` — new. Fixtures built through real store operations
   (`applyImport`), per project convention. Covers: both-sides-have-data happy
   path; position/points/form/fantasy gaps each moving the score in the right
-  direction; grade thresholds; `null` when a side has no imported matches; zero
-  spread not producing NaN; adjustments flowing into the fantasy component.
+  direction, **isolated one at a time** (a fixture where all four move together
+  proves nothing about any of them); the exact grade and tag at each threshold,
+  plus the just-below-`0.14` boundary returning `favoured: null`; `null` when a
+  side has no imported matches; zero spread not producing NaN; adjustments
+  flowing into the fantasy component; a club missing from a form table (imported
+  match with a null score) scoring without NaN; clubs with unequal games played;
+  and a fixture set where the last-3 and last-5 windows genuinely differ — with
+  every club on exactly N matches the three tables are identical and most of the
+  module is untested.
+
+  Assertions must pin values, not shapes. `toBeGreaterThan(0)` on a 1-based rank,
+  `toBeGreaterThanOrEqual(0)` on a `max - min` spread, and
+  `typeof x === "number"` (which passes on NaN) cannot fail for the right reason.
 - `test/matchesTab.test.jsx` — new SSR smoke test via `renderToStaticMarkup`:
   an upcoming fixture renders chips and a tag, a played fixture does not, and
   team pills render as links.
