@@ -1,6 +1,6 @@
 // test/fixtures.test.js
 import { describe, it, expect } from "vitest";
-import { emptyData, applyImport } from "../src/lib/store.js";
+import { emptyData, applyImport, setPlayerField, setAdjustment } from "../src/lib/store.js";
 import { fixtureContext, compareFixture } from "../src/lib/fixtures.js";
 
 const NOW = 1765000000000;
@@ -85,5 +85,118 @@ describe("fixtureContext", () => {
     const ctx = fixtureContext(emptyData());
     expect(ctx.teamCount).toBe(0);
     expect(ctx.ppgSpread).toBe(0);
+  });
+});
+
+describe("compareFixture", () => {
+  const upcoming = (home, away) => ({
+    eventId: 900, round: 4, kickoff: NOW + DAY, status: "notstarted",
+    homeTeamId: home, awayTeamId: away, homeScore: null, awayScore: null,
+  });
+
+  it("returns both sides with position, points, form and fantasy", () => {
+    const d = fourTeamSeason();
+    const cmp = compareFixture(fixtureContext(d), upcoming(1, 2));
+    expect(cmp.home.teamId).toBe("1");
+    expect(cmp.away.teamId).toBe("2");
+    expect(cmp.home.pos).toBe(1);
+    expect(cmp.away.pos).toBe(4);
+    expect(cmp.home.points).toBe(9);
+    expect(cmp.away.points).toBe(0);
+    expect(cmp.home.played).toBe(3);
+    expect(cmp.home.form3).toBeGreaterThan(0);
+    expect(cmp.home.form5).toBeGreaterThan(0);
+    expect(cmp.home.teamCount).toBe(4);
+    expect(typeof cmp.home.fantasy).toBe("number");
+  });
+
+  it("scores the stronger side positive from the home perspective", () => {
+    const ctx = fixtureContext(fourTeamSeason());
+    expect(compareFixture(ctx, upcoming(1, 2)).score).toBeGreaterThan(0);
+    expect(compareFixture(ctx, upcoming(2, 1)).score).toBeLessThan(0);
+  });
+
+  it("mirrors: swapping the sides negates the score and keeps the favoured club", () => {
+    const ctx = fixtureContext(fourTeamSeason());
+    const a = compareFixture(ctx, upcoming(1, 2));
+    const b = compareFixture(ctx, upcoming(2, 1));
+    expect(a.score).toBeCloseTo(-b.score, 10);
+    expect(a.favoured.teamId).toBe("1");
+    expect(b.favoured.teamId).toBe("1");
+  });
+
+  it("grades by magnitude and names the reasons", () => {
+    const ctx = fixtureContext(fourTeamSeason());
+    const cmp = compareFixture(ctx, upcoming(1, 2)); // 1st v 4th, biggest gap available
+    expect(["slight", "strong", "mismatch"]).toContain(cmp.favoured.grade);
+    expect(cmp.favoured.tag).toMatch(/^🎯+$/u); // /u: the emoji is a surrogate pair
+    expect(cmp.favoured.reasons.join(" ")).toMatch(/position \+3/);
+    expect(cmp.favoured.reasons.some((r) => r.startsWith("points +"))).toBe(true);
+    expect(cmp.favoured.reasons.some((r) => r.startsWith("form "))).toBe(true);
+    expect(cmp.favoured.reasons.some((r) => r.startsWith("fantasy "))).toBe(true);
+  });
+
+  it("leaves evenly matched clubs untagged", () => {
+    // DER and SLI drew with each other and each beat/lost to the same clubs once.
+    const d = seed([
+      { eventId: 201, round: 1, kickoff: NOW - 3 * DAY, home: 3, away: 4, hs: 1, as: 1 },
+      { eventId: 202, round: 2, kickoff: NOW - 2 * DAY, home: 4, away: 3, hs: 2, as: 2 },
+    ]);
+    const cmp = compareFixture(fixtureContext(d), upcoming(3, 4));
+    expect(cmp.score).toBeCloseTo(0, 10);
+    expect(cmp.favoured).toBeNull();
+  });
+
+  it("returns null when either club has no imported matches", () => {
+    const ctx = fixtureContext(fourTeamSeason());
+    expect(compareFixture(ctx, upcoming(1, 99))).toBeNull();
+    expect(compareFixture(ctx, upcoming(99, 1))).toBeNull();
+    expect(compareFixture(fixtureContext(emptyData()), upcoming(1, 2))).toBeNull();
+  });
+
+  it("never yields NaN when a league metric has zero spread", () => {
+    // Two clubs, one draw: identical on every metric, so every spread is 0.
+    const d = seed([{ eventId: 301, round: 1, kickoff: NOW - DAY, home: 1, away: 2, hs: 0, as: 0 }]);
+    const cmp = compareFixture(fixtureContext(d), upcoming(1, 2));
+    expect(Number.isNaN(cmp.score)).toBe(false);
+    expect(cmp.score).toBeCloseTo(0, 10);
+  });
+
+  it("counts team fantasy points — including an adjustment — in the score", () => {
+    // Two clubs, two 1-1 draws: dead level on position, points and form, so the
+    // fantasy component is the only thing that can move the score.
+    let d = seed([
+      { eventId: 401, round: 1, kickoff: NOW - 2 * DAY, home: 1, away: 2, hs: 1, as: 1 },
+      { eventId: 402, round: 2, kickoff: NOW - DAY, home: 2, away: 1, hs: 1, as: 1 },
+    ]);
+    d = setPlayerField(d, 11, "gamePosition", "FWD");
+    d = setPlayerField(d, 12, "gamePosition", "FWD");
+
+    const level = fixtureContext(d);
+    expect(level.rows.get("1").fantasy).toBeGreaterThan(0);
+    expect(level.rows.get("1").fantasy).toBe(level.rows.get("2").fantasy);
+    expect(level.fpgSpread).toBe(0);
+    expect(compareFixture(level, upcoming(1, 2)).score).toBeCloseTo(0, 10);
+
+    // A user correction on SHE's forward is now the only difference between them:
+    // the whole score is the fantasy component at full strength (weight 0.20).
+    const adjusted = fixtureContext(setAdjustment(d, "401:11", { assists: 1 }));
+    expect(adjusted.rows.get("1").fantasy).toBeGreaterThan(adjusted.rows.get("2").fantasy);
+    expect(adjusted.fpgSpread).toBeGreaterThan(0);
+    const cmp = compareFixture(adjusted, upcoming(1, 2));
+    expect(cmp.parts.fpg).toBeCloseTo(1, 10);
+    expect(cmp.parts.pos).toBe(0);
+    expect(cmp.score).toBeCloseTo(0.2, 10);
+    expect(cmp.favoured.teamId).toBe("1");
+    expect(cmp.favoured.reasons).toContain("fantasy +1.5/game");
+  });
+
+  it("keeps the score inside [-1, 1]", () => {
+    const ctx = fixtureContext(fourTeamSeason());
+    for (const m of [upcoming(1, 2), upcoming(2, 1), upcoming(3, 4)]) {
+      const s = compareFixture(ctx, m).score;
+      expect(s).toBeGreaterThanOrEqual(-1);
+      expect(s).toBeLessThanOrEqual(1);
+    }
   });
 });
