@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
+import { fixtureContext, compareFixture } from "../lib/fixtures.js";
 import { TeamPill, PtsPill } from "./Pills.jsx";
 
 const fmtDate = (ts) =>
@@ -12,6 +13,58 @@ const teamLabel = (t) => (
     <span className="lt-sm">{t?.shortName ?? "?"}</span>
   </>
 );
+
+const ORD = ["th", "st", "nd", "rd"];
+const ord = (n) => {
+  if (n == null) return "—";
+  const v = n % 100;
+  return `${n}${ORD[(v - 20) % 10] || ORD[v] || ORD[0]}`;
+};
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const signed = (n, digits = 0) => (n >= 0 ? "+" : "") + n.toFixed(digits);
+
+// Green when this side leads the metric, dimmed when it trails, plain when level.
+const cmpCls = (mine, theirs, lowerIsBetter = false) => {
+  if (mine === theirs) return "";
+  const better = lowerIsBetter ? mine < theirs : mine > theirs;
+  return better ? " cmp-up" : " cmp-down";
+};
+
+const gapWords = (mine, theirs, oppName) => {
+  const d = theirs - mine; // positions: lower is better
+  if (d === 0) return `level with ${oppName}`;
+  return `${plural(Math.abs(d), "place")} ${d > 0 ? "better" : "worse"} than ${oppName}`;
+};
+
+// Level clubs read as "level with X" rather than a bare "+0".
+const deltaWords = (mine, theirs, oppName, digits = 0) =>
+  mine === theirs ? `level with ${oppName}` : `${signed(mine - theirs, digits)} vs ${oppName}`;
+
+// One side's four chips, plus the 🎯 tag when this is the favoured club.
+function SideChips({ side, opp, oppName, tag, tagTitle }) {
+  return (
+    <span className="cmp-chips">
+      {tag && <span className="chip cmp-tag" title={tagTitle}>{tag}</span>}
+      <span className={`chip${cmpCls(side.pos, opp.pos, true)}`}
+        title={`league position ${ord(side.pos)} of ${side.teamCount} — ${gapWords(side.pos, opp.pos, oppName)}`}>
+        {ord(side.pos)}
+      </span>
+      <span className={`chip${cmpCls(side.points, opp.points)}`}
+        title={`${plural(side.points, "pt")} from ${plural(side.played, "game")} (${side.ppg.toFixed(2)}/game) — ${deltaWords(side.points, opp.points, oppName)}`}>
+        {side.points}
+      </span>
+      <span className={`chip${cmpCls((side.form3 + side.form5) / 2, (opp.form3 + opp.form5) / 2, true)}`}
+        title={`form: ${ord(side.form3)} over last 3, ${ord(side.form5)} over last 5 (${oppName} ${ord(opp.form3)} / ${ord(opp.form5)})`}>
+        F {side.form3}/{side.form5}
+      </span>
+      <span className={`chip${cmpCls(side.fantasy, opp.fantasy)}`}
+        title={`${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fantasy, opp.fantasy, oppName)}`}>
+        {side.fantasy}F
+      </span>
+    </span>
+  );
+}
 
 export default function MatchesTab({ data, update }) {
   const currentRef = useRef(null);
@@ -47,6 +100,9 @@ export default function MatchesTab({ data, update }) {
 
   const suspects = roundSuspects(data);
   const teamPts = useMemo(() => allMatchTeamPoints(data), [data]);
+  const ctx = useMemo(() => fixtureContext(data), [data]);
+  // Comparison is for fixtures still to be played; a result speaks for itself.
+  const cmpFor = (m) => (!gone(m) && m.status !== "finished" ? compareFixture(ctx, m) : null);
 
   return (
     <div>
@@ -58,12 +114,25 @@ export default function MatchesTab({ data, update }) {
           style={{ scrollMarginTop: 56 }}
         >
           <h3>Round {round ?? "?"} <span className="dim">— {fmtDate(items[0].kickoff)}</span></h3>
-          {items.map((m) => (
+          {items.map((m) => {
+            const cmp = cmpFor(m);
+            const homeName = data.teams[m.homeTeamId]?.shortName ?? "?";
+            const awayName = data.teams[m.awayTeamId]?.shortName ?? "?";
+            const tagTitle = cmp?.favoured
+              ? `favourable for ${data.teams[cmp.favoured.teamId]?.shortName ?? "?"} (${cmp.favoured.grade}): ${cmp.favoured.reasons.join(", ")}`
+              : "";
+            const favHome = cmp?.favoured && cmp.favoured.teamId === cmp.home.teamId;
+            const favAway = cmp?.favoured && cmp.favoured.teamId === cmp.away.teamId;
+            return (
             <div key={m.eventId} className="card row">
               <span style={{ flex: 1 }}>
                 <TeamPill team={data.teams[m.homeTeamId]} label={teamLabel(data.teams[m.homeTeamId])} />
                 {teamPts.has(m.eventId) && <> <PtsPill pts={teamPts.get(m.eventId).home} /></>}
+                {cmp && <> <SideChips side={cmp.home} opp={cmp.away} oppName={awayName}
+                  tag={favHome ? cmp.favoured.tag : null} tagTitle={tagTitle} /></>}
                 {" "}{m.homeScore ?? ""}–{m.awayScore ?? ""}{" "}
+                {cmp && <><SideChips side={cmp.away} opp={cmp.home} oppName={homeName}
+                  tag={favAway ? cmp.favoured.tag : null} tagTitle={tagTitle} /> </>}
                 {teamPts.has(m.eventId) && <><PtsPill pts={teamPts.get(m.eventId).away} /> </>}
                 <TeamPill team={data.teams[m.awayTeamId]} label={teamLabel(data.teams[m.awayTeamId])} />
                 <span className="dim"> · {fmtDate(m.kickoff)}</span>
@@ -87,7 +156,7 @@ export default function MatchesTab({ data, update }) {
                 : m.importedAt ? <span style={{ color: "var(--accent)" }}>✓</span>
                 : <span className="dim">not imported</span>}
             </div>
-          ))}
+          );})}
         </section>
       ))}
       {hiddenShells > 0 && (

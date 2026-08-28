@@ -148,3 +148,10 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
   color: inherit; background: var(--panel); border: 1px solid var(--line);
   border-radius: 8px; padding: 6px 12px; white-space: nowrap; }
 .ext:hover { border-color: var(--accent); color: var(--accent); }
+
+/* fixture comparison chips (Matches tab, upcoming fixtures) */
+.cmp-chips { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.cmp-chips .chip { background: var(--bg); color: var(--dim); border: 1px solid var(--line); }
+.cmp-chips .chip.cmp-up { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cmp-chips .chip.cmp-down { opacity: .55; }
+.cmp-chips .chip.cmp-tag { background: var(--warn); border-color: var(--warn); color: #fff; cursor: help; }
