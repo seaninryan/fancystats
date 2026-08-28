@@ -65,10 +65,10 @@ const formTitle = (side, opp, oppName) => {
 // leagueTable only accrues fantasy points for players with a gamePosition, so a
 // zero total is a data gap, not a weakness: lib suppresses the metric and both
 // chips go neutral, so the tooltip must not present 0 as a real value.
-const fantasyTitle = (side, opp, oppName) =>
-  side.fantasy === 0 || opp.fantasy === 0
-    ? "no fantasy points recorded yet (needs positions set)"
-    : `${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fpg, opp.fpg, oppName, 1, "/game")}`;
+const fantasyTitle = (side, opp, oppName, covered) =>
+  covered
+    ? `${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fpg, opp.fpg, oppName, 1, "/game")}`
+    : "no fantasy points recorded yet (needs positions set)";
 
 // Team pill that navigates to the club on the Teams tab.
 function TeamLink({ team, teamId, openTeam }) {
@@ -84,7 +84,7 @@ function TeamLink({ team, teamId, openTeam }) {
 
 // One side's four chips, plus the 🎯 tag when this is the favoured club.
 // Values are lib's; the only job here is wording and tint.
-function SideChips({ side, opp, oppName, tag, tagTitle }) {
+function SideChips({ side, opp, oppName, covered, tag, tagTitle }) {
   return (
     <span className="cmp-chips">
       {tag && <span className="chip cmp-tag" title={tagTitle}>{tag}</span>}
@@ -99,7 +99,7 @@ function SideChips({ side, opp, oppName, tag, tagTitle }) {
       <span className={`chip${leadCls(side.lead.form)}`} title={formTitle(side, opp, oppName)}>
         F {rankLabel(side.form3)}/{rankLabel(side.form5)}
       </span>
-      <span className={`chip${leadCls(side.lead.fantasy)}`} title={fantasyTitle(side, opp, oppName)}>
+      <span className={`chip${leadCls(side.lead.fantasy)}`} title={fantasyTitle(side, opp, oppName, covered)}>
         {side.fantasy}F
       </span>
     </span>
@@ -168,10 +168,10 @@ export default function MatchesTab({ data, update, openTeam }) {
               <span style={{ flex: 1 }}>
                 <TeamLink team={data.teams[m.homeTeamId]} teamId={m.homeTeamId} openTeam={openTeam} />
                 {teamPts.has(m.eventId) && <> <PtsPill pts={teamPts.get(m.eventId).home} /></>}
-                {cmp && <> <SideChips side={cmp.home} opp={cmp.away} oppName={awayName}
+                {cmp && <> <SideChips side={cmp.home} opp={cmp.away} oppName={awayName} covered={cmp.fantasyCovered}
                   tag={favHome ? cmp.favoured.tag : null} tagTitle={tagTitle} /></>}
                 {" "}{m.homeScore ?? ""}–{m.awayScore ?? ""}{" "}
-                {cmp && <><SideChips side={cmp.away} opp={cmp.home} oppName={homeName}
+                {cmp && <><SideChips side={cmp.away} opp={cmp.home} oppName={homeName} covered={cmp.fantasyCovered}
                   tag={favAway ? cmp.favoured.tag : null} tagTitle={tagTitle} /> </>}
                 {teamPts.has(m.eventId) && <><PtsPill pts={teamPts.get(m.eventId).away} /> </>}
                 <TeamLink team={data.teams[m.awayTeamId]} teamId={m.awayTeamId} openTeam={openTeam} />

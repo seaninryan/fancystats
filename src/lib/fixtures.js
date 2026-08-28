@@ -182,5 +182,10 @@ export function compareFixture(ctx, match) {
       ],
     };
   }
-  return { home: { ...home, lead: lead(1) }, away: { ...away, lead: lead(-1) }, score, parts, favoured };
+  // Exposed so the UI can word a suppressed fantasy chip as missing data rather
+  // than as a genuine tie — lead.fantasy is 0 for both cases.
+  return {
+    home: { ...home, lead: lead(1) }, away: { ...away, lead: lead(-1) },
+    score, parts, fantasyCovered, favoured,
+  };
 }

@@ -45,9 +45,22 @@ already `.row` with `flex-wrap`).
 | Chip | Value | Tooltip |
 |---|---|---|
 | `4th` | league table position | `league position 4th of 10 — 5 places better than BOH` |
-| `38` | league points | `38 pts from 18 games (2.11/game) — +14 vs BOH` |
+| `38` | league points | `2.11 pts/game — +0.90/game vs BOH; 38 pts from 18 games` |
 | `F 2/2` | last-3 / last-5 form-table positions | `form: 2nd over last 3, 2nd over last 5 (BOH 8th / 7th)` |
-| `612F` | team fantasy points | `612 fantasy pts (34.0/game) — +132 vs BOH` |
+| `612F` | team fantasy points | `612 fantasy pts (34.0/game) — +7.3/game vs BOH` |
+
+Both the points and the fantasy tooltip lead with the **per-game** delta, because
+per-game is what the tag scored: with unequal games played a total-points delta
+can point the opposite way to the chip's own tint, and a tooltip that argues with
+its own chip colour is worse than no tooltip. The totals stay as the chip labels
+and as trailing detail in the tooltip. The position tooltip words its comparison
+from the *scored* (tie-aware) ranks for the same reason, saying "level on the
+table's tiebreakers" where the displayed dense positions differ but the scored gap
+is zero.
+
+The tint direction is never re-derived in the component: `compareFixture` returns
+a per-metric `lead` (+1 leads / -1 trails / 0 level or no data) computed from the
+same gaps the score uses, and the component only maps it to a class.
 
 Each chip is tinted for the leading side and dimmed for the trailing side, so the
 direction reads at a glance; exact deltas live in the tooltip. Equal values are

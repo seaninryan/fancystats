@@ -358,6 +358,7 @@ describe("compareFixture", () => {
     expect(ctx.fpgSpread).toBeGreaterThan(0);      // the table really is split
     const cmp = compareFixture(ctx, upcoming(1, 2));
     expect(cmp.parts.fpg).toBe(0);                 // but it is not a signal
+    expect(cmp.fantasyCovered).toBe(false);        // the UI says "missing", not "level"
     expect(cmp.score).toBe(0);
     expect(cmp.favoured).toBeNull();
     expect(cmp.home.lead.fantasy).toBe(0);
@@ -381,6 +382,7 @@ describe("compareFixture", () => {
     expect(adjusted.rows.get("1").fantasy).toBeGreaterThan(adjusted.rows.get("2").fantasy);
     const cmp = compareFixture(adjusted, upcoming(1, 2));
     expect(cmp.parts).toEqual({ pos: 0, ppg: 0, form: 0, fpg: 1 });
+    expect(cmp.fantasyCovered).toBe(true);
     expect(cmp.score).toBeCloseTo(0.2, 12);
     expect(cmp.favoured).toMatchObject({ teamId: "1", grade: "slight", tag: "🎯" });
     expect(cmp.favoured.reasons).toContain("fantasy +1.5/game");
