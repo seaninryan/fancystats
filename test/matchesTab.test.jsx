@@ -219,3 +219,72 @@ describe("MatchesTab fixture comparison", () => {
     expect(render(emptyData())).toContain("No matches yet");
   });
 });
+
+// SHE and BOH each beat DER 2-0: level on points, goal difference and goals for,
+// so they share a *scored* rank while still showing dense 1st and 2nd. BOH v DER
+// is then the wording trap — the scored gap is two ranks, the visible gap one
+// place — and a tooltip quoting the scored gap claims two places between a 2nd
+// and a 3rd, arithmetic the user can see is wrong.
+const tieGroup = () => {
+  let d = emptyData();
+  for (const [eventId, round, days, winner] of [[701, 1, 4, 1], [702, 2, 3, 2]]) {
+    d = applyImport(d, {
+      match: {
+        eventId, round, kickoff: ago(days), status: "finished",
+        homeTeamId: winner, awayTeamId: 3, homeScore: 2, awayScore: 0,
+        goalTimes: { home: [], away: [] }, partial: false,
+      },
+      teams: WITH_DERRY,
+      players: [{ id: 10 + winner, name: `P${winner}`, teamId: winner }, { id: 13, name: "P3", teamId: 3 }],
+      appearances: [app(eventId, 10 + winner, winner, 2), app(eventId, 13, 3, 0)],
+    }, NOW);
+  }
+  return upsertMatchStubs(d, [{
+    eventId: 900, round: 3, kickoff: NOW + DAY, status: "notstarted",
+    homeTeamId: 2, awayTeamId: 3, homeScore: null, awayScore: null,
+  }], WITH_DERRY);
+};
+
+// Only SHE's scorer has a position, so SHE have a real fantasy total and BOH read
+// 0 — a data gap. lib suppresses the metric for the whole fixture, but SHE's chip
+// still shows their real number, so it must not be labelled as missing data.
+const oneSquadPositioned = () => fixture(setPlayerField(seed([
+  { eventId: 101, round: 1, kickoff: ago(3), home: 1, away: 2, hs: 3, as: 0 },
+  { eventId: 102, round: 2, kickoff: ago(2), home: 2, away: 1, hs: 0, as: 2 },
+]), 11, "gamePosition", "FWD"));
+
+describe("MatchesTab tooltips never contradict their own chip", () => {
+  it("measures the position gap in the displayed places, not the scored ranks", () => {
+    const { home, away, row } = upcoming(tieGroup());
+    // The two chips on this row are 2nd and 3rd: one place apart, and both
+    // tooltips must say one — the scored gap of two ranks is not on screen.
+    expect(home).toContain('title="league position 2nd of 3 — 1 place better than DER">2nd</span>');
+    expect(away).toContain('title="league position 3rd of 3 — 1 place worse than BOH">3rd</span>');
+    expect(row).not.toContain("2 places");
+    // The tag's breakdown quotes the same visible gap.
+    expect(row).toContain("position +1");
+    expect(row).not.toContain("position +2");
+  });
+
+  it("still calls a shared scored rank level, whatever the displayed positions", () => {
+    const { home, away } = upcoming(levelPair());
+    expect(home).toContain("level with BOH on the table&#x27;s tiebreakers");
+    expect(away).toContain("level with SHE on the table&#x27;s tiebreakers");
+    // Dense positions differ, so this is not the trivial case.
+    expect(home).toContain(">1st</span>");
+    expect(away).toContain(">2nd</span>");
+  });
+
+  it("blames the club that is actually missing fantasy data", () => {
+    const { home, away } = upcoming(oneSquadPositioned());
+    const MISSING = "no fantasy points recorded yet (needs positions set)";
+    // BOH have nothing recorded: their own chip says so, and reads 0F.
+    expect(away).toContain(`<span class="chip" title="${MISSING}">0F</span>`);
+    // SHE have a real total. Naming it missing would contradict the chip.
+    const she = home.match(/<span class="chip([^"]*)" title="([^"]*)">(\d+)F<\/span>/);
+    expect(Number(she[3])).toBeGreaterThan(0);
+    expect(she[2]).toBe(`${she[3]} fantasy pts (${(Number(she[3]) / 2).toFixed(1)}/game) — not compared: BOH have ${MISSING}`);
+    // Suppressed means neutral on both sides, not a win for SHE.
+    expect(she[1]).toBe("");
+  });
+});

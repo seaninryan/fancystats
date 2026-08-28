@@ -175,7 +175,11 @@ export function compareFixture(ctx, match) {
       teamId: dir > 0 ? home.teamId : away.teamId,
       score, grade, tag,
       reasons: [
-        reason("position", gaps.pos == null ? null : dir * gaps.pos, 0),
+        // Quote the gap between the DISPLAYED positions: the tooltip sits beside
+        // two visible chips, and a reader can check the subtraction. Level clubs
+        // (a zero scored gap) still read "+0" whatever their dense positions —
+        // that is the gap the score actually used.
+        reason("position", gaps.pos == null ? null : dir * (gaps.pos === 0 ? 0 : away.pos - home.pos), 0),
         reason("points", dir * gaps.ppg, 2, "/game"),
         reason("form", formGap == null ? null : dir * formGap, 1),
         reason("fantasy", gaps.fpg == null ? null : dir * gaps.fpg, 1, "/game"),

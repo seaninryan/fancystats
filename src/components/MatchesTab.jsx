@@ -36,12 +36,15 @@ const signed = (n, digits = 0) => {
 // polarity can disagree with the score the 🎯 tag was graded from.
 const leadCls = (lead) => (lead > 0 ? " cmp-up" : lead < 0 ? " cmp-down" : "");
 
-// Position wording reads off the *scored* ranks, which is what the tint came
-// from: two clubs the table cannot separate share a scored rank while their
-// displayed positions differ, and "level" has to mean what the colour means.
+// Level-or-not comes from the *scored* ranks, so "level" means what the colour
+// means; the size of the gap comes from the *displayed* ranks, so the arithmetic
+// matches the two positions on screen. (Clubs the table cannot separate share a
+// scored rank while still showing distinct dense positions — quoting the scored
+// gap there would claim two places between a 2nd and a 3rd.) Order agrees
+// whenever the scored gap is non-zero, so the wording never fights the tint.
 const posWords = (side, opp, oppName) => {
-  const d = opp.scored.pos - side.scored.pos; // a lower position is better
-  if (d === 0) return `level with ${oppName} on the table's tiebreakers`;
+  if (side.scored.pos === opp.scored.pos) return `level with ${oppName} on the table's tiebreakers`;
+  const d = opp.pos - side.pos; // a lower position is better
   return `${plural(Math.abs(d), "place")} ${d > 0 ? "better" : "worse"} than ${oppName}`;
 };
 
@@ -63,12 +66,17 @@ const formTitle = (side, opp, oppName) => {
 };
 
 // leagueTable only accrues fantasy points for players with a gamePosition, so a
-// zero total is a data gap, not a weakness: lib suppresses the metric and both
-// chips go neutral, so the tooltip must not present 0 as a real value.
-const fantasyTitle = (side, opp, oppName, covered) =>
-  covered
-    ? `${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game) — ${deltaWords(side.fpg, opp.fpg, oppName, 1, "/game")}`
-    : "no fantasy points recorded yet (needs positions set)";
+// zero total is a data gap, not a weakness: lib suppresses the metric for the
+// whole fixture and both chips go neutral. Name WHOSE gap it is — the other club
+// may have a real total of its own on screen, and telling its owner "nothing
+// recorded yet" beside a chip reading 612F is nonsense.
+const NO_FANTASY = "no fantasy points recorded yet (needs positions set)";
+const fantasyTitle = (side, opp, oppName, covered) => {
+  const mine = `${side.fantasy} fantasy pts (${side.fpg.toFixed(1)}/game)`;
+  if (covered) return `${mine} — ${deltaWords(side.fpg, opp.fpg, oppName, 1, "/game")}`;
+  if (side.fantasy === 0) return NO_FANTASY;
+  return `${mine} — not compared: ${oppName} have ${NO_FANTASY}`;
+};
 
 // Team pill that navigates to the club on the Teams tab.
 function TeamLink({ team, teamId, openTeam }) {
