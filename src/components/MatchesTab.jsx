@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { matchRound, setMatchRound, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
+import { matchRound, setMatchRound, swapRounds, isSupersededPostponed, roundSuspects, allMatchTeamPoints } from "../lib/store.js";
 import { fixtureContext, compareFixture } from "../lib/fixtures.js";
 import { TeamPill, PtsPill } from "./Pills.jsx";
 
@@ -45,6 +45,17 @@ const deltaLabel = (d) => {
 // 0 level or no data. Never re-derive a direction here — a locally computed
 // polarity can disagree with the score the 🎯 tag was graded from.
 const leadCls = (lead) => (lead > 0 ? " cmp-up" : lead < 0 ? " cmp-down" : "");
+
+// SofaScore keeps a postponed fixture's original round number, so a whole round
+// replayed out of order is numbered wrong. The swap button's title carries the
+// whole sentence — which two rounds, and how many matches move — and states both
+// counts when they differ ("moves 5 and 4 matches", one plural noun for the pair)
+// rather than implying the sections are the same size.
+const swapTitle = (round, count, n) =>
+  `swap Round ${round} with Round ${n.round} — `
+  + (count === n.items.length
+    ? `moves all ${count} match${count === 1 ? "" : "es"} in each`
+    : `moves ${count} and ${n.items.length} matches`);
 
 const rankWords = (d, levelWords) => (d === 0 ? levelWords : `${places(d)} ${d > 0 ? "better" : "worse"}`);
 
@@ -215,13 +226,21 @@ export default function MatchesTab({ data, update, openTeam }) {
   return (
     <div>
       {matches.length === 0 && <p className="dim">No matches yet — run the console import on the ⚙ Settings tab.</p>}
-      {rounds.map(({ round, items }) => (
+      {rounds.map(({ round, items }, i) => (
         <section
           key={round ?? "none"}
           ref={round === currentRound ? currentRef : null}
           style={{ scrollMarginTop: 56 }}
         >
-          <h3>Round {round ?? "?"} <span className="dim">— {fmtDate(items[0].kickoff)}</span></h3>
+          <h3>Round {round ?? "?"} <span className="dim">— {fmtDate(items[0].kickoff)}</span>
+            {round != null && [rounds[i - 1], rounds[i + 1]]
+              .filter((n) => n && n.round != null)
+              .map((n) => (
+                <button key={n.round} className="chip" style={{ marginLeft: 6 }}
+                  title={swapTitle(round, items.length, n)}
+                  onClick={() => update((d) => swapRounds(d, round, n.round))}>⇅R{n.round}</button>
+              ))}
+          </h3>
           {items.map((m) => {
             const cmp = cmpFor(m);
             const homeName = data.teams[m.homeTeamId]?.shortName ?? "?";

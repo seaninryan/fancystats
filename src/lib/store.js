@@ -61,12 +61,42 @@ export function matchRound(m) {
   return m.roundOverride ?? m.round;
 }
 
+// The one rule both round writers obey: an override equal to the match's natural
+// round is noise, so it is deleted rather than stored. Keeps the save clean and
+// lets a later event re-sync still correct the round from SofaScore.
+function writeRound(m, round) {
+  if (round == null || round === m.round) delete m.roundOverride;
+  else m.roundOverride = round;
+}
+
 export function setMatchRound(data, eventId, round) {
   const next = structuredClone(data);
   const m = next.matches[eventId];
   if (!m) return data;
-  if (round == null || round === m.round) delete m.roundOverride;
-  else m.roundOverride = round;
+  writeRound(m, round);
+  return next;
+}
+
+// Swap two whole gameweeks: every match effectively in `a` takes `b` and vice
+// versa. SofaScore keeps a postponed fixture's original round number, so when a
+// whole round is replayed out of order its numbering is simply wrong and the
+// user says so with one click. Superseded postponed shells are skipped: they are
+// invisible everywhere, and isSupersededPostponed pairs on the *natural* round,
+// so overriding the live event never breaks the sibling.
+export function swapRounds(data, a, b) {
+  if (a == null || b == null || a === b) return data;
+  // Partition before mutating, so neither group can see the other's new round.
+  const inA = [], inB = [];
+  for (const m of Object.values(data.matches)) {
+    if (isSupersededPostponed(data, m)) continue;
+    const r = matchRound(m);
+    if (r === a) inA.push(m.eventId);
+    else if (r === b) inB.push(m.eventId);
+  }
+  if (!inA.length && !inB.length) return data;
+  const next = structuredClone(data);
+  for (const id of inA) writeRound(next.matches[id], b);
+  for (const id of inB) writeRound(next.matches[id], a);
   return next;
 }
 

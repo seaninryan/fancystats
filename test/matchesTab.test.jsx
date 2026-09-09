@@ -373,3 +373,40 @@ describe("MatchesTab chips never contradict their own tint", () => {
     expect(she[1]).toBe("");
   });
 });
+
+// Rounds 1 (one match), 2 (two) and 3 (two upcoming), plus a stub with no round
+// at all — the "Round ?" group, which owns no swap button.
+const roundSections = () => upsertMatchStubs(seed([
+  { eventId: 101, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 0 },
+  { eventId: 201, round: 2, kickoff: ago(6), home: 1, away: 3, hs: 2, as: 0 },
+  { eventId: 202, round: 2, kickoff: ago(6), home: 2, away: 4, hs: 0, as: 1 },
+], FIVE), [
+  { eventId: 901, round: 3, kickoff: NOW + DAY, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null },
+  { eventId: 902, round: 3, kickoff: NOW + DAY, status: "notstarted", homeTeamId: 3, awayTeamId: 4, homeScore: null, awayScore: null },
+  { eventId: 999, round: null, kickoff: NOW + 9 * DAY, status: "notstarted", homeTeamId: 4, awayTeamId: 5, homeScore: null, awayScore: null },
+], FIVE);
+
+// Each section's header, newest round first; the no-round group renders last.
+const headers = (html) => [...html.matchAll(/<h3>([\s\S]*?)<\/h3>/g)].map((m) => m[1]);
+const swapLabels = (h) => [...h.matchAll(/<button[^>]*>⇅R(\d+)<\/button>/g)].map((m) => m[1]);
+
+describe("MatchesTab round swap buttons", () => {
+  it("offers each section its adjacent sections, and the no-round group none", () => {
+    const [r3, r2, r1, none] = headers(render(roundSections()));
+    expect(r3).toContain("Round 3");
+    expect(swapLabels(r3)).toEqual(["2"]); // nothing newer than round 3
+    expect(swapLabels(r2)).toEqual(["3", "1"]); // newer neighbour first, as displayed
+    expect(swapLabels(r1)).toEqual(["2"]); // the no-round group is not a partner
+    expect(none).toContain("Round ?");
+    expect(swapLabels(none)).toEqual([]);
+    expect(none).not.toContain("<button");
+  });
+
+  it("names both rounds and both match counts in the title", () => {
+    const [, r2] = headers(render(roundSections()));
+    expect(r2).toContain('title="swap Round 2 with Round 3 — moves all 2 matches in each"');
+    expect(r2).toContain('title="swap Round 2 with Round 1 — moves 2 and 1 matches"');
+    const [, , r1] = headers(render(roundSections()));
+    expect(r1).toContain('title="swap Round 1 with Round 2 — moves 1 and 2 matches"');
+  });
+});

@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import {
   emptyData, applyImport, upsertMatchStubs, setPlayerField,
   setAdjustment, deriveRealPosition, playerTotals, positionMismatch,
-  applyPasteResults, matchRound, setMatchRound, playerAppearances, appearancesByPlayer,
+  applyPasteResults, matchRound, setMatchRound, swapRounds, playerAppearances, appearancesByPlayer,
   markOut, clearOut, activeFlag, mismatchInfo, isSupersededPostponed, staleInfo,
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
@@ -212,6 +212,83 @@ describe("round overrides", () => {
     expect(matchRound(d.matches["100"])).toBe(14);
     d = upsertMatchStubs(d, [{ eventId: 100, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0 }], []);
     expect(matchRound(d.matches["100"])).toBe(14);
+  });
+});
+
+describe("swapRounds", () => {
+  const FOUR = [
+    { id: 1, name: "Shamrock Rovers", shortName: "SRO" }, { id: 2, name: "Bohemians", shortName: "BOH" },
+    { id: 3, name: "Shelbourne", shortName: "SHE" }, { id: 4, name: "Drogheda United", shortName: "DRO" },
+  ];
+  // The observed case: a whole round 30 replayed after round 31, so SofaScore's
+  // numbering and the order the games were played in disagree for that pair.
+  const twoRounds = () => upsertMatchStubs(emptyData(), [
+    { eventId: 3001, round: 30, kickoff: 1765200000000, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null },
+    { eventId: 3002, round: 30, kickoff: 1765200000000, status: "notstarted", homeTeamId: 3, awayTeamId: 4, homeScore: null, awayScore: null },
+    { eventId: 3101, round: 31, kickoff: 1765000000000, status: "notstarted", homeTeamId: 2, awayTeamId: 3, homeScore: null, awayScore: null },
+    { eventId: 3102, round: 31, kickoff: 1765000000000, status: "notstarted", homeTeamId: 4, awayTeamId: 1, homeScore: null, awayScore: null },
+  ], FOUR);
+  const postponed = (data, eventId, homeTeamId, awayTeamId) => upsertMatchStubs(data, [{
+    eventId, round: 30, kickoff: 1764900000000, status: "postponed",
+    homeTeamId, awayTeamId, homeScore: null, awayScore: null,
+  }], []);
+
+  it("moves every match in both rounds to the other round", () => {
+    const d = swapRounds(twoRounds(), 30, 31);
+    expect(matchRound(d.matches["3001"])).toBe(31);
+    expect(matchRound(d.matches["3002"])).toBe(31);
+    expect(matchRound(d.matches["3101"])).toBe(30);
+    expect(matchRound(d.matches["3102"])).toBe(30);
+    expect(d.matches["3001"].round).toBe(30); // natural round untouched
+  });
+
+  it("leaves no roundOverride behind after a swap and a swap back", () => {
+    let d = swapRounds(twoRounds(), 30, 31);
+    expect(Object.values(d.matches).filter((m) => "roundOverride" in m)).toHaveLength(4);
+    d = swapRounds(d, 30, 31);
+    // Asserted on the field, not matchRound: a redundant override would still
+    // read correctly on screen but dirty the save and block a re-sync fix.
+    expect(Object.values(d.matches).filter((m) => "roundOverride" in m)).toHaveLength(0);
+    expect(matchRound(d.matches["3001"])).toBe(30);
+    expect(matchRound(d.matches["3101"])).toBe(31);
+  });
+
+  it("swaps a match on its effective round, not its natural one", () => {
+    // 3101 is naturally round 31 but the user already moved it into 30.
+    let d = setMatchRound(twoRounds(), 3101, 30);
+    d = swapRounds(d, 30, 31);
+    expect(matchRound(d.matches["3101"])).toBe(31);
+    expect(d.matches["3101"].roundOverride).toBeUndefined(); // 31 is its natural round
+    expect(matchRound(d.matches["3001"])).toBe(31);
+    expect(matchRound(d.matches["3102"])).toBe(30);
+  });
+
+  it("leaves superseded postponed shells alone", () => {
+    const d = postponed(twoRounds(), 3003, 1, 2); // twin of 3001, rescheduled by SofaScore
+    expect(isSupersededPostponed(d, d.matches["3003"])).toBe(true);
+    const s = swapRounds(d, 30, 31);
+    expect(s.matches["3003"].roundOverride).toBeUndefined();
+    expect(matchRound(s.matches["3003"])).toBe(30);
+    expect(matchRound(s.matches["3001"])).toBe(31); // the live event still moved
+    expect(isSupersededPostponed(s, s.matches["3003"])).toBe(true); // pairing still holds
+  });
+
+  it("moves a visible postponed match with its round", () => {
+    const d = postponed(twoRounds(), 3004, 1, 3); // no replacement event: on screen
+    expect(isSupersededPostponed(d, d.matches["3004"])).toBe(false);
+    expect(matchRound(swapRounds(d, 30, 31).matches["3004"])).toBe(31);
+  });
+
+  it("returns the same data object for every no-op", () => {
+    const d = twoRounds();
+    expect(swapRounds(d, 30, 30)).toBe(d);
+    expect(swapRounds(d, null, 30)).toBe(d);
+    expect(swapRounds(d, 30, null)).toBe(d);
+    expect(swapRounds(d, 98, 99)).toBe(d); // neither round has a match
+    // Not a guard: a populated round renumbers onto an empty one.
+    const moved = swapRounds(d, 30, 99);
+    expect(moved).not.toBe(d);
+    expect(matchRound(moved.matches["3001"])).toBe(99);
   });
 });
 
