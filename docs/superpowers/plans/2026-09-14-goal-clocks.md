@@ -766,6 +766,19 @@ git commit -m "feat: goal clocks feed the favourable-fixture score at 0.10"
 
 ### Background you need
 
+Each side of the comparison now carries `side.clock`, shaped:
+
+```js
+clock: {
+  scored:   { ago: <number>, open: <boolean> },
+  conceded: { ago: <number>, open: <boolean> },
+  span:     <number>,   // matches * 90
+  matches:  <number>,
+}
+```
+
+`side.scored` is something else entirely — the tie-aware rank block `{ pos, form3, form5 }` read by `posDelta`/`formDelta`. Don't confuse them.
+
 `SideChips` renders the **same chip order for both sides**; only the values mirror. The visual asymmetry — `fpts` innermost on the home side, outermost on the away side — comes from `.fx-home { justify-content: flex-end }` / `.fx-away { justify-content: flex-start }` in the CSS. The new chip goes **last in `SideChips`**, after `fpts`, for both sides.
 
 Every chip's tint comes from `leadCls(side.lead.X)` and nothing else. Never re-derive a direction in this file, and never restate the 180-minute threshold — `cmp.drastic` already says which halves crossed it.
@@ -797,8 +810,8 @@ Then after `fantasyTitle` (ends line 145) and before `function TeamLink`, add:
 
 ```js
 // An open clock is a lower bound: "450'+", never a bare number implying a goal
-// was found inside the window.
-const clockLabel = (mins, open) => `${mins}'${open ? "+" : ""}`;
+// was found inside the window. Takes a clock half — { ago, open }.
+const clockLabel = (c) => `${c.ago}'${c.open ? "+" : ""}`;
 
 // The chip face. Both halves point the same way — positive is good for the club
 // the chip sits beside — so a reader never has to remember that one clock reads
@@ -833,15 +846,15 @@ const drasticClause = (drastic) => {
 };
 
 const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
-  const mine = `goal clock: last scored ${clockLabel(side.scoredAgo, side.scoredOpen)} ago,`
-    + ` last conceded ${clockLabel(side.concededAgo, side.concededOpen)} ago`;
+  const mine = `goal clock: last scored ${clockLabel(side.clock.scored)} ago,`
+    + ` last conceded ${clockLabel(side.clock.conceded)} ago`;
   // Say how much evidence each clock rests on when the two clubs differ — the
   // same honesty gamesClause gives the points chip.
-  const span = side.matches === opp.matches
-    ? ` (last ${side.matches})`
-    : ` (last ${side.matches} v ${oppName} ${opp.matches})`;
-  const theirs = ` v ${oppName} ${clockLabel(opp.scoredAgo, opp.scoredOpen)}`
-    + ` / ${clockLabel(opp.concededAgo, opp.concededOpen)}`;
+  const span = side.clock.matches === opp.clock.matches
+    ? ` (last ${side.clock.matches})`
+    : ` (last ${side.clock.matches} v ${oppName} ${opp.clock.matches})`;
+  const theirs = ` v ${oppName} ${clockLabel(opp.clock.scored)}`
+    + ` / ${clockLabel(opp.clock.conceded)}`;
   const body = `${halfPhrase(scoredGap, "scored")}, ${halfPhrase(concededGap, "conceded")}`;
   return `${mine}${span}${theirs} — ${body}${drasticClause(drastic)}`;
 };
