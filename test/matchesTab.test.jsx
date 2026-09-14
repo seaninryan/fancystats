@@ -60,7 +60,8 @@ const fixture = (d, stub, teams = TEAMS) => upsertMatchStubs(d, [{
 
 // SHE beat BOH twice: 1st v 2nd, 6 points v 0, top of both form windows. Nobody
 // has a gamePosition, so both fantasy totals are 0 and that metric is suppressed.
-// score = 0.20 + 0.30 + 0.30 = 0.80 -> mismatch.
+// Both clocks are open (no goal times seeded), so the goals metric is
+// suppressed too: score = 0.18 + 0.27 + 0.27 = 0.72 -> mismatch.
 const seeded = () => fixture(seed([
   { eventId: 101, round: 1, kickoff: ago(3), home: 1, away: 2, hs: 3, as: 0 },
   { eventId: 102, round: 2, kickoff: ago(2), home: 2, away: 1, hs: 0, as: 2 },
@@ -473,6 +474,9 @@ describe("MatchesTab goal clocks", () => {
 
   it("shows no clock chip on a played fixture", () => {
     const played = rows(render(sharpVsBlunt()))[1];
+    // Anchor on the result first: without it the two negatives below would pass
+    // just as happily against a row that never rendered at all.
+    expect(played).toContain('<span class="fx-score">1–0</span>');
     expect(played).not.toContain("⚽");
     expect(played).not.toContain("🛡");
   });
