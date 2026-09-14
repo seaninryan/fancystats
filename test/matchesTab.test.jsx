@@ -37,7 +37,7 @@ function seed(results, teams = TEAMS) {
       match: {
         eventId: r.eventId, round: r.round, kickoff: r.kickoff, status: "finished",
         homeTeamId: r.home, awayTeamId: r.away, homeScore: r.hs, awayScore: r.as,
-        goalTimes: { home: [], away: [] }, partial: false,
+        goalTimes: { home: r.hg ?? [], away: r.ag ?? [] }, partial: false,
       },
       teams,
       players: [
@@ -160,6 +160,12 @@ const chipCount = (group) => group.match(/<span /g).length;
 const faces = (group) => Object.fromEntries(
   [...group.matchAll(/>(pos|pts|form|fpts) ([^<]*)</g)].map((m) => [m[1], m[2]]));
 
+// The goal-clock chip's two halves: { scored: "+400", conceded: "+400" }.
+const clock = (group) => {
+  const m = group.match(/>⚽([^ ]+) 🛡([^<]+)</);
+  return m ? { scored: m[1], conceded: m[2] } : null;
+};
+
 const upcoming = (d) => {
   const row = rows(render(d))[0];
   const [home, away] = chipGroups(row);
@@ -167,12 +173,15 @@ const upcoming = (d) => {
 };
 
 describe("MatchesTab fixture comparison", () => {
-  it("gives each side its own group of four chips", () => {
+  it("gives each side its own group of five chips", () => {
     const { home, away } = upcoming(seeded());
-    expect(chipCount(home)).toBe(5); // four chips plus the 🎯 tag
-    expect(chipCount(away)).toBe(4);
+    expect(chipCount(home)).toBe(6); // five chips plus the 🎯 tag
+    expect(chipCount(away)).toBe(5);
     expect(Object.keys(faces(home))).toEqual(["pos", "pts", "form", "fpts"]);
     expect(Object.keys(faces(away))).toEqual(["pos", "pts", "form", "fpts"]);
+    // The fifth chip carries no `metric label` prefix, so faces() cannot see it.
+    expect(clock(home)).not.toBe(null);
+    expect(clock(away)).not.toBe(null);
     // Each group's tooltips name the *other* club, which is what identifies it.
     expect(home).toContain("v BOH 2nd of 2 — 1 place better");
     expect(away).toContain("v SHE 1st of 2 — 1 place worse");
@@ -208,7 +217,9 @@ describe("MatchesTab fixture comparison", () => {
 
   it("tags the favoured club, beside its own name, and only that club", () => {
     const { home, away } = upcoming(seeded());
-    const TAG = '<span class="chip cmp-tag" title="favourable for SHE (mismatch): position +1, points +3.00/game, form +1.0, fantasy —">🎯🎯🎯</span>';
+    // Both clubs' clocks are open in seeded() — no goal times at all — so the
+    // goals reason reads —/—, the same suppression the fantasy reason shows.
+    const TAG = '<span class="chip cmp-tag" title="favourable for SHE (mismatch): position +1, points +3.00/game, form +1.0, fantasy —, goals —/—">🎯🎯🎯</span>';
     expect(home).toContain(TAG);
     // Home group sits right of its club name, so the tag leads; the away group
     // sits left of its name, so on that side it would have to trail.
@@ -371,6 +382,99 @@ describe("MatchesTab chips never contradict their own tint", () => {
     expect(she[4]).toBe(`not compared: BOH have ${MISSING}`);
     // Suppressed means neutral on both sides, not a win for SHE.
     expect(she[1]).toBe("");
+  });
+});
+
+// SHE scored on 80' of their latest match (10' ago); BOH's last goal was four
+// matches back on 40', giving 4 * 90 + 50 = 410'. The concessions mirror,
+// because these two only ever play each other. Both gaps: 400'.
+const sharpVsBlunt = () => fixture(seed([
+  { eventId: 501, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 1, hg: [10], ag: [40] },
+  { eventId: 502, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 1, as: 0, hg: [10], ag: [] },
+  { eventId: 503, round: 3, kickoff: ago(7), home: 1, away: 2, hs: 1, as: 0, hg: [10], ag: [] },
+  { eventId: 504, round: 4, kickoff: ago(6), home: 1, away: 2, hs: 1, as: 0, hg: [10], ag: [] },
+  { eventId: 505, round: 5, kickoff: ago(5), home: 1, away: 2, hs: 1, as: 0, hg: [80], ag: [] },
+]), { round: 6 });
+
+describe("MatchesTab goal clocks", () => {
+  it("shows both clocks as one mirrored chip", () => {
+    const { home, away } = upcoming(sharpVsBlunt());
+    expect(clock(home)).toEqual({ scored: "+400", conceded: "+400" });
+    expect(clock(away)).toEqual({ scored: "-400", conceded: "-400" });
+  });
+
+  it("tints the leading side, dims the trailing side, and bolds both", () => {
+    const { home, away } = upcoming(sharpVsBlunt());
+    expect(home).toMatch(/<span class="chip cmp-up cmp-hot" title="goal clock:[^"]*">⚽\+400 🛡\+400<\/span>/);
+    expect(away).toMatch(/<span class="chip cmp-down cmp-hot" title="goal clock:[^"]*">⚽-400 🛡-400<\/span>/);
+  });
+
+  it("quotes both clubs' raw clocks and names which halves are drastic", () => {
+    const { home, away } = upcoming(sharpVsBlunt());
+    expect(home).toContain("last scored 10&#x27; ago, last conceded 410&#x27; ago");
+    expect(home).toContain("v BOH 410&#x27; / 10&#x27;");
+    // Equal evidence on both sides, so the span clause names one count only.
+    expect(home).toContain("(last 5 matches)");
+    expect(home).not.toContain("v their");
+    // Each half is worded from the chip's own club, and the clause says WHICH
+    // halves crossed the threshold plus how far apart the threshold sits.
+    expect(home).toContain("— 400&#x27; more recently, 400&#x27; longer without conceding"
+      + "; both gaps drastic (2 matches apart)");
+    expect(away).toContain("— 400&#x27; longer without scoring, 400&#x27; less time since conceding"
+      + "; both gaps drastic (2 matches apart)");
+    expect(home).not.toContain("NaN");
+    expect(home).not.toContain("null");
+  });
+
+  it("calls two open clocks not compared, never level", () => {
+    // The stock fixtures carry no goal times at all, so every clock is open.
+    const { home, away, row } = upcoming(seeded());
+    expect(clock(home)).toEqual({ scored: "—", conceded: "—" });
+    expect(clock(away)).toEqual({ scored: "—", conceded: "—" });
+    expect(home).toContain("not compared: neither club has scored or conceded inside their windows");
+    expect(home).not.toContain("level on");
+    expect(row).not.toContain("cmp-hot");
+  });
+
+  it("marks an open clock as a lower bound with a trailing +", () => {
+    const { home } = upcoming(seeded());
+    // SHE have two matches of evidence and no goal times: 180'+, not 180'.
+    expect(home).toContain("last scored 180&#x27;+ ago");
+    expect(home).toContain("last conceded 180&#x27;+ ago");
+    expect(home).toContain("v BOH 180&#x27;+ / 180&#x27;+");
+  });
+
+  it("leaves a small gap unbolded and says nothing about drastic", () => {
+    // BOH's last goal is one match back on 80': a 90' gap, under the threshold.
+    const { row, home } = upcoming(fixture(seed([
+      { eventId: 511, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 1, hg: [10], ag: [80] },
+      { eventId: 512, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 1, as: 0, hg: [80], ag: [] },
+    ]), { round: 3 }));
+    expect(clock(home)).toEqual({ scored: "+90", conceded: "+90" });
+    expect(home).toContain("— 90&#x27; more recently, 90&#x27; longer without conceding\"");
+    expect(row).not.toContain("cmp-hot");
+    expect(home).not.toContain("drastic");
+  });
+
+  it("names both clubs' match counts when they differ", () => {
+    // SHE 2 matches, BOH 3 — BOH have an extra fixture against Derry.
+    const { home, away } = upcoming(fixture(seed([
+      { eventId: 521, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 1, hg: [10], ag: [40] },
+      { eventId: 522, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 1, as: 0, hg: [10], ag: [] },
+      { eventId: 523, round: 3, kickoff: ago(7), home: 2, away: 3, hs: 1, as: 0, hg: [20], ag: [] },
+    ], WITH_DERRY), { round: 4 }, WITH_DERRY));
+    expect(home).toContain("(last 2 matches v their 3)");
+    expect(away).toContain("(last 3 matches v their 2)");
+    // BOH's extra match splits the halves: they scored more recently but have
+    // also gone longer without conceding, so the two gaps differ in size.
+    expect(clock(home)).toEqual({ scored: "-10", conceded: "-30" });
+    expect(clock(away)).toEqual({ scored: "+10", conceded: "+30" });
+  });
+
+  it("shows no clock chip on a played fixture", () => {
+    const played = rows(render(sharpVsBlunt()))[1];
+    expect(played).not.toContain("⚽");
+    expect(played).not.toContain("🛡");
   });
 });
 
