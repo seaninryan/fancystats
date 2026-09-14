@@ -166,8 +166,24 @@ The two clocks are one component, at 0.10. The other four scale by 0.9:
 form — a club that has not scored in 450 minutes is already bottom of both. A
 larger weight would re-count the same evidence under a new name.
 
-Grade thresholds (`0.45` / `0.28` / `0.14`) are unchanged, so existing tags
-barely move.
+Grade thresholds (`0.45` / `0.28` / `0.14`) are unchanged.
+
+**They are deliberately NOT scaled by 0.9, and this has a visible consequence:**
+where the goals component is suppressed — both clocks open on both halves, which
+is every fixture before any goal-clock evidence exists — the surviving four
+metrics now carry 0.9 of the weight instead of 1.0, so those scores deflate by a
+tenth and a fixture that scored 0.147 and earned a 🎯 now scores 0.132 and earns
+none.
+
+That is correct, not a regression. The module already behaves this way: when
+`fantasyCovered` is false, that metric's weight is dead and the score is lower
+for it. Less evidence should mean a weaker claim. Scaling `GRADES` by 0.9 to
+hold tag frequency steady would do the opposite damage — it would make
+*well-covered* fixtures, where the goals component is live and the score can
+still reach ±1, tag **more** often than they do today, which nobody asked for.
+
+Recalibrating `test/fixtures.test.js`'s threshold fixtures against the new scale
+is expected work, not a sign the weights are wrong.
 
 ### Lead and drastic
 
