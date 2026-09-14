@@ -93,6 +93,29 @@ A club with no qualifying matches has no entry in the map. `compareFixture`
 already returns `null` for the whole fixture when either club is missing from
 the league table, so this case never reaches the chip.
 
+### Two open clocks cannot be compared
+
+**When both clubs' clocks on the same half are open, that half contributes 0 and
+both its chip halves render neutral.** An open clock is a lower bound, not a
+value: `180'+` and `360'+` differ only because one club has four matches of
+evidence and the other has two. Subtracting them manufactures a 180-minute gap
+out of games played, which is the artifact this whole metric must not produce —
+and with the difference frequently landing on `DRASTIC`, it would manufacture a
+highlight too.
+
+This is the same rule `fantasyCovered` already applies: a data gap is not a
+signal. Track it as `scoredCompared` / `concededCompared` so the tooltip can
+word a neutral half as "not compared" rather than as a genuine tie.
+
+**Known limitation, accepted.** One open clock against one closed clock is still
+compared, and it can be wrong: a closed `300'` against an open `180'+` is
+genuinely indeterminate, because the open club's true drought could be anything
+from 180 upwards. It is compared anyway — the case is rare (it needs a club to
+go a full window without scoring or without conceding), the error is bounded by
+a 0.10 weight, and the tooltip marks the bound with `+`. Suppressing it instead
+would silence the common and *correct* reading, where a full `450'+` drought
+really does exceed a closed one. Do not "fix" this into interval arithmetic.
+
 ## 2. Scoring
 
 `fixtureContext` calls `teamGoalClocks(data, FORM_LONG)` once and stores the map;
@@ -105,11 +128,15 @@ scoredGap   = away.scored   - home.scored     // + = home scored more recently
 concededGap = home.conceded - away.conceded   // + = home has stayed clean longer
 ```
 
-Each is normalised against a **fixed** `CAP = 90 * FORM_LONG = 450`, then
-clamped to ±1 by the existing `clamp1`:
+Either gap is `null` when both clubs' clocks on that half are open (see above).
+A live gap is normalised against a **fixed** `CAP = 90 * FORM_LONG = 450`, then
+clamped to ±1 by the existing `clamp1`. A `null` gap contributes 0 to the mean
+rather than dropping out of it — the same treatment the `form` component already
+gives an unranked window:
 
 ```
-parts.goals = (clamp1(scoredGap / CAP) + clamp1(concededGap / CAP)) / 2
+part = (gap) => (gap == null ? 0 : clamp1(gap / CAP));
+parts.goals = (part(scoredGap) + part(concededGap)) / 2;
 ```
 
 A fixed cap, not a league spread. The other per-game metrics divide by the
@@ -148,7 +175,8 @@ barely move.
 chip's tint is never re-derived in the component.
 
 `drastic` is a **separate boolean**, true when `|scoredGap| >= DRASTIC` or
-`|concededGap| >= DRASTIC`, where `DRASTIC = 180` (two matches). It is deliberately
+`|concededGap| >= DRASTIC`, where `DRASTIC = 180` (two matches). A `null` gap
+never contributes — a suppressed half cannot be drastic. It is deliberately
 not folded into the tint: a fixture can read `⚽+312 🛡-400`, where the two halves
 are drastically apart but the combined lead is level or points the other way,
 and there would be no tint to make bold. Keeping the two orthogonal means the
@@ -196,6 +224,10 @@ Rules:
 
 - An open clock is written `450'+`, and the phrase is "no goal in the last 5",
   never a bare number implying a goal was found.
+- A suppressed half (both clocks open) reads "not compared: neither club has
+  scored inside their window" / "...conceded inside their window", never
+  "level" — a tie and an absence of evidence are different things, and the
+  `fpts` chip already sets this precedent.
 - When the two clubs' `span` differ, add the clause naming it, e.g.
   `over 5 matches v BOH 3`.
 - The drastic clause names **which** halves crossed the threshold: "both gaps
@@ -244,6 +276,11 @@ per project convention:
   nets to a smaller component than both pointing the same way.
 - The cap clamps: a 600' gap and a 450' gap produce the same component.
 - `drastic` is true at exactly 180 and false at 179, on either half alone.
+- Two open clocks with different spans (180'+ v 360'+) produce a `null` gap, a
+  zero contribution and `drastic: false` — the artifact this rule exists to
+  kill. Assert the gap is `null`, not merely that the score is small.
+- One open clock against one closed clock IS still compared (the accepted
+  limitation), so the suppression is not over-broad.
 - `drastic` is true while `lead.goals` is 0 (the `⚽+312 🛡-400` shape) — the
   orthogonality the design depends on.
 - `lead.goals` is mirrored between the two sides, and `drastic` is equal.
@@ -255,7 +292,17 @@ Assertions pin values, not shapes — `toBeGreaterThan(0)` on a clock and
 `typeof x === "number"` (which passes on `NaN`) cannot fail for the right reason.
 
 **`test/matchesTab.test.jsx`** — the fifth chip renders on an upcoming fixture,
-does not render on a played one, and a drastic fixture emits `cmp-hot`.
+does not render on a played one, and a drastic fixture emits `cmp-hot`. A
+suppressed half reads "not compared", never "level".
+
+Every existing assertion in this file that counts chips per side, enumerates
+`["pos", "pts", "form", "fpts"]`, or quotes the 🎯 tag's full reason string has
+to be updated for the fifth chip and the new `goals` reason — these are expected
+breakages, not regressions. The file's `seed()` helper currently passes an empty
+`goalTimes` alongside non-zero scores, so every existing fixture has two open
+clocks on both clubs and therefore a fully suppressed, neutral chip; extend
+`seed()` with optional per-match goal minutes rather than editing the existing
+fixtures, so the old assertions keep testing what they were written to test.
 
 **`npm run build`** for JSX errors the tests cannot catch.
 
