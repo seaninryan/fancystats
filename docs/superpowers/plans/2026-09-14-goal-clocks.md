@@ -922,6 +922,8 @@ git commit -m "feat: goal-clock chip on upcoming fixtures, bold when drastic"
 
 ### Background you need
 
+**Task 3's tooltip wording was revised during review.** Do not trust any expected string in this task text — render first, read the actual tooltip, and write the assertion from what you see, then check the wording against the intent stated below.
+
 This file renders `MatchesTab` through `renderToStaticMarkup` and asserts on exact HTML strings. Adding a fifth chip and a new tag reason **breaks several existing assertions by design**. Update them; do not weaken them into `toContain("pos")`-style shape checks.
 
 The file's `seed()` helper passes an empty `goalTimes` alongside non-zero scores, so **every existing fixture has two open clocks on both clubs** → both halves suppressed → a fully neutral `⚽— 🛡—` chip with no `cmp-hot`. That is why the existing tint and tag assertions survive with only the fifth chip added.
@@ -1008,7 +1010,8 @@ describe("MatchesTab goal clocks", () => {
 
   it("quotes both clubs' raw clocks and names which halves are drastic", () => {
     const { home } = upcoming(sharpVsBlunt());
-    expect(home).toContain("last scored 10&#x27; ago, last conceded 410&#x27; ago (last 5)");
+    expect(home).toContain("last scored 10&#x27; ago, last conceded 410&#x27; ago");
+    expect(home).toContain("(last 5 matches)");
     expect(home).toContain("v BOH 410&#x27; / 10&#x27;");
     expect(home).toContain("both gaps drastic");
     expect(home).not.toContain("NaN");
@@ -1020,8 +1023,7 @@ describe("MatchesTab goal clocks", () => {
     const { home, away, row } = upcoming(seeded());
     expect(clock(home)).toEqual({ scored: "—", conceded: "—" });
     expect(clock(away)).toEqual({ scored: "—", conceded: "—" });
-    expect(home).toContain("not compared: neither club has scored inside their window");
-    expect(home).toContain("not compared: neither club has conceded inside their window");
+    expect(home).toContain("not compared: neither club has scored or conceded inside their windows");
     expect(home).not.toContain("level on scoring");
     expect(row).not.toContain("cmp-hot");
   });
@@ -1050,7 +1052,7 @@ describe("MatchesTab goal clocks", () => {
       { eventId: 522, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 1, as: 0, hg: [10], ag: [] },
       { eventId: 523, round: 3, kickoff: ago(7), home: 2, away: 3, hs: 1, as: 0, hg: [20], ag: [] },
     ], WITH_DERRY), { round: 4 }, WITH_DERRY));
-    expect(home).toContain("(last 2 v BOH 3)");
+    expect(home).toContain("(last 2 matches v their 3)");
   });
 
   it("shows no clock chip on a played fixture", () => {
