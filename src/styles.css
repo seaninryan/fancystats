@@ -177,3 +177,9 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 .cmp-chips .chip.cmp-up { background: var(--accent); border-color: var(--accent); color: #fff; }
 .cmp-chips .chip.cmp-down { opacity: .55; }
 .cmp-chips .chip.cmp-tag { background: var(--warn); border-color: var(--warn); color: #fff; cursor: help; }
+/* A drastic divergence on either goal clock. Composes with any tint —
+   cmp-up cmp-hot, cmp-down cmp-hot, or bare cmp-hot when the halves cancel. */
+.cmp-chips .chip.cmp-hot { font-weight: 700; box-shadow: inset 0 0 0 1px var(--warn); }
+/* cmp-down fades to .55; a highlight that is simultaneously faded is not a
+   highlight, so lift it back to readable. */
+.cmp-chips .chip.cmp-down.cmp-hot { opacity: .8; }

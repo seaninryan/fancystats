@@ -41,6 +41,10 @@ const deltaLabel = (d) => {
   return r === 0 ? "0" : (r > 0 ? "+" : "-") + num(Math.abs(r));
 };
 
+// Mirror a home-signed gap onto the away side. `null` (a suppressed half) stays
+// null; 0 stays 0 rather than becoming -0, which formats as "-0".
+const flip = (g) => (g == null ? null : g === 0 ? 0 : -g);
+
 // Tint straight from lib's verdict on who leads the metric: +1 leads, -1 trails,
 // 0 level or no data. Never re-derive a direction here — a locally computed
 // polarity can disagree with the score the 🎯 tag was graded from.
@@ -144,6 +148,56 @@ const fantasyTitle = (side, opp, oppName, covered) => {
         side.lead.fantasy, side, opp, oppName)}`;
 };
 
+// An open clock is a lower bound: "450'+", never a bare number implying a goal
+// was found inside the window. Takes a clock half — { ago, open }.
+const clockLabel = (c) => `${c.ago}'${c.open ? "+" : ""}`;
+
+// The chip face. Both halves point the same way — positive is good for the club
+// the chip sits beside — so a reader never has to remember that one clock reads
+// better high and the other better low.
+const clockFace = (scored, conceded) => `⚽${deltaLabel(scored)} 🛡${deltaLabel(conceded)}`;
+
+// A suppressed half is an absence of evidence, not a tie. The fpts chip sets the
+// precedent: never word a data gap as "level".
+const HALVES = {
+  scored: {
+    noun: "scoring", none: "neither club has scored inside their window",
+    ahead: "more recently", behind: "longer without scoring",
+  },
+  conceded: {
+    noun: "clean sheets", none: "neither club has conceded inside their window",
+    ahead: "longer unbeaten at the back", behind: "less time since conceding",
+  },
+};
+const halfPhrase = (gap, key) => {
+  const w = HALVES[key];
+  if (gap == null) return `${w.noun} not compared: ${w.none}`;
+  if (gap === 0) return `level on ${w.noun}`;
+  return `${Math.abs(gap)}' ${gap > 0 ? w.ahead : w.behind}`;
+};
+
+// Names WHICH halves crossed the threshold — a highlight the reader cannot
+// attribute is noise. The threshold itself lives only in fixtures.js.
+const drasticClause = (drastic) => {
+  const hits = [drastic.scored && "scoring", drastic.conceded && "clean-sheet"].filter(Boolean);
+  if (!hits.length) return "";
+  return `; ${hits.length === 2 ? "both gaps" : `${hits[0]} gap`} drastic (two matches apart)`;
+};
+
+const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
+  const mine = `goal clock: last scored ${clockLabel(side.clock.scored)} ago,`
+    + ` last conceded ${clockLabel(side.clock.conceded)} ago`;
+  // Say how much evidence each clock rests on when the two clubs differ — the
+  // same honesty gamesClause gives the points chip.
+  const span = side.clock.matches === opp.clock.matches
+    ? ` (last ${side.clock.matches})`
+    : ` (last ${side.clock.matches} v ${oppName} ${opp.clock.matches})`;
+  const theirs = ` v ${oppName} ${clockLabel(opp.clock.scored)}`
+    + ` / ${clockLabel(opp.clock.conceded)}`;
+  const body = `${halfPhrase(scoredGap, "scored")}, ${halfPhrase(concededGap, "conceded")}`;
+  return `${mine}${span}${theirs} — ${body}${drasticClause(drastic)}`;
+};
+
 // Team pill that navigates to the club on the Teams tab.
 function TeamLink({ team, teamId, openTeam }) {
   return (
@@ -156,11 +210,12 @@ function TeamLink({ team, teamId, openTeam }) {
   );
 }
 
-// One side's four chips, plus the 🎯 tag when this is the favoured club — first
+// One side's five chips, plus the 🎯 tag when this is the favoured club — first
 // on the home side, last on the away side, so it always sits beside its own club
 // name. Every chip is a signed delta from this side's view, so the two groups
-// mirror; the tint is always lib's `lead`, never the sign on the chip face.
-function SideChips({ side, opp, oppName, covered, tag, tagTitle, tagFirst }) {
+// mirror; the tint is always lib's `lead`, never the sign on the chip face. The
+// clock gaps arrive home-signed, so the away group is handed them flipped.
+function SideChips({ side, opp, oppName, covered, scoredGap, concededGap, drastic, tag, tagTitle, tagFirst }) {
   const pos = posDelta(side, opp);
   const form = formDelta(side, opp);
   const fantasy = covered ? side.fantasy - opp.fantasy : null;
@@ -179,6 +234,10 @@ function SideChips({ side, opp, oppName, covered, tag, tagTitle, tagFirst }) {
       </span>
       <span className={`chip${leadCls(side.lead.fantasy)}`} title={fantasyTitle(side, opp, oppName, covered)}>
         fpts {deltaLabel(fantasy)}
+      </span>
+      <span className={`chip${leadCls(side.lead.goals)}${drastic.any ? " cmp-hot" : ""}`}
+        title={clockTitle(side, opp, oppName, scoredGap, concededGap, drastic)}>
+        {clockFace(scoredGap, concededGap)}
       </span>
       {!tagFirst && tagEl}
     </span>
@@ -256,11 +315,13 @@ export default function MatchesTab({ data, update, openTeam }) {
                 <TeamLink team={data.teams[m.homeTeamId]} teamId={m.homeTeamId} openTeam={openTeam} />
                 {teamPts.has(m.eventId) && <PtsPill pts={teamPts.get(m.eventId).home} />}
                 {cmp && <SideChips side={cmp.home} opp={cmp.away} oppName={awayName} covered={cmp.fantasyCovered}
+                  scoredGap={cmp.scoredGap} concededGap={cmp.concededGap} drastic={cmp.drastic}
                   tag={favHome ? cmp.favoured.tag : null} tagTitle={tagTitle} tagFirst />}
               </span>
               <span className="fx-score">{m.homeScore ?? ""}–{m.awayScore ?? ""}</span>
               <span className="fx-side fx-away">
                 {cmp && <SideChips side={cmp.away} opp={cmp.home} oppName={homeName} covered={cmp.fantasyCovered}
+                  scoredGap={flip(cmp.scoredGap)} concededGap={flip(cmp.concededGap)} drastic={cmp.drastic}
                   tag={favAway ? cmp.favoured.tag : null} tagTitle={tagTitle} />}
                 {teamPts.has(m.eventId) && <PtsPill pts={teamPts.get(m.eventId).away} />}
                 <TeamLink team={data.teams[m.awayTeamId]} teamId={m.awayTeamId} openTeam={openTeam} />
