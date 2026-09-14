@@ -1,4 +1,4 @@
-import { leagueTable, leagueOrder } from "./store.js";
+import { leagueTable, leagueOrder, teamGoalClocks, MATCH_MINUTES } from "./store.js";
 
 // Fixture comparison: how two clubs stack up right now on league position,
 // league points, 3- and 5-game form position, and team fantasy points.
@@ -52,13 +52,15 @@ export function fixtureContext(data) {
     count5: long.length,
     ppgSpread: spread(all, (r) => perGame(r.points, r.played)),
     fpgSpread: spread(all, (r) => perGame(r.fantasy, r.played)),
+    // Built once for the whole page, like the three league tables above.
+    clocks: teamGoalClocks(data, FORM_LONG),
   };
 }
 
 // Weights sum to 1. Position carries less than its per-game twin because it
 // ranks on *total* points, so a club with games in hand sits artificially low
 // (see the spec).
-const WEIGHTS = { pos: 0.20, ppg: 0.30, form: 0.30, fpg: 0.20 };
+const WEIGHTS = { pos: 0.18, ppg: 0.27, form: 0.27, fpg: 0.18, goals: 0.10 };
 
 // Grades on |score|, strongest first. No home-advantage term — we have no data
 // to calibrate one (see the spec).
@@ -67,6 +69,17 @@ const GRADES = [
   [0.28, "strong", "🎯🎯"],
   [0.14, "slight", "🎯"],
 ];
+
+// The goal clocks are a KNOWN scale — 0 to a full window — so they normalise
+// against a fixed cap, not against the league's own spread the way ppg and fpg
+// do. Spread-normalising a clock would rescale the opening weeks' noise, when
+// every club's clocks are small and close together, into a full-strength
+// signal. Derived from FORM_LONG so the window and the denominator cannot
+// drift apart.
+const CAP = FORM_LONG * MATCH_MINUTES;
+// Two matches apart on either half. The ONLY definition of the threshold — the
+// component reads which halves are drastic, never the number.
+const DRASTIC = 2 * MATCH_MINUTES;
 
 // Guards the ±1 contract the GRADES table depends on. Neither call site can
 // exceed it today — both clubs in a fixture are rows of the table the spread and
@@ -94,9 +107,22 @@ const signed = (n, digits = 0) => {
 const reason = (label, gap, digits, suffix = "") =>
   gap == null ? `${label} —` : `${label} ${signed(gap, digits)}${suffix}`;
 
+// "goals +395'/+360'" — scored gap then conceded gap, from the favoured club's
+// view, matching the chip face. Two values, so it does not go through the
+// single-gap `reason()` helper. A suppressed half reads "—", never "NaN".
+const clockReason = (dir, scoredGap, concededGap) => {
+  const half = (g) => (g == null ? "—" : `${signed(dir * g, 0)}'`);
+  return `goals ${half(scoredGap)}/${half(concededGap)}`;
+};
+
 function sideOf(ctx, teamId) {
   const row = ctx.rows.get(teamId);
   if (!row) return null; // no imported matches -> nothing to compare
+  // ctx.clocks is keyed by teamId as a NUMBER; teamId here is a string (record
+  // fields are numbers, object keys are strings — see CLAUDE.md). Every club in
+  // the league table has a clock, so the fallback is unreachable defence.
+  const c = ctx.clocks.get(Number(teamId))
+    ?? { scored: 0, scoredOpen: true, conceded: 0, concededOpen: true, span: 0, matches: 0 };
   return {
     teamId,
     // What the user sees, and what the Table tab agrees with.
@@ -109,6 +135,11 @@ function sideOf(ctx, teamId) {
     ppg: perGame(row.points, row.played),
     fantasy: row.fantasy,
     fpg: perGame(row.fantasy, row.played),
+    // Goal clocks. Named *Ago because `scored` below is the tie-aware rank block
+    // and has been since the fixture comparison shipped.
+    scoredAgo: c.scored, scoredOpen: c.scoredOpen,
+    concededAgo: c.conceded, concededOpen: c.concededOpen,
+    span: c.span, matches: c.matches,
     // What the score is computed from: level clubs share a rank.
     scored: {
       pos: ctx.table.scored.get(teamId),
@@ -128,8 +159,18 @@ export function compareFixture(ctx, match) {
 
   // leagueTable only accrues fantasy points for players with a gamePosition, so
   // a club whose squad has no positions yet would read as the league's worst on
-  // a 0.20-weight metric. A missing total is a data gap, not form.
+  // a 0.18-weight metric. A missing total is a data gap, not form.
   const fantasyCovered = home.fantasy !== 0 && away.fantasy !== 0;
+
+  // An open clock is a LOWER BOUND, not a value. Two open clocks differ only by
+  // how many matches of evidence each club has — subtracting 180'+ from 450'+
+  // manufactures a gap out of games played, and lands often enough on DRASTIC to
+  // manufacture a highlight too. Same rule fantasyCovered applies: a data gap is
+  // not a signal. One open against one closed IS still compared — a documented,
+  // accepted limitation; do not widen this.
+  const clockGap = (a, aOpen, b, bOpen) => (aOpen && bOpen ? null : a - b);
+  const scoredGap = clockGap(away.scoredAgo, away.scoredOpen, home.scoredAgo, home.scoredOpen);
+  const concededGap = clockGap(home.concededAgo, home.concededOpen, away.concededAgo, away.concededOpen);
 
   const gaps = {
     pos: rankGap(home.scored.pos, away.scored.pos),
@@ -146,6 +187,10 @@ export function compareFixture(ctx, match) {
     // contributes 0 to the mean rather than dropping out of it.
     form: (part(gaps.form3, ctx.count3 - 1) + part(gaps.form5, ctx.count5 - 1)) / 2,
     fpg: part(gaps.fpg, ctx.fpgSpread),
+    // Each half against the same fixed cap; a suppressed half contributes 0 to
+    // the mean rather than dropping out of it, exactly as an unranked form
+    // window does above.
+    goals: (part(scoredGap, CAP) + part(concededGap, CAP)) / 2,
   };
   // Which side leads each metric. Derived from the same parts the score uses, so
   // a chip's tint can never point the other way from the tag.
@@ -154,12 +199,24 @@ export function compareFixture(ctx, match) {
     points: sign(dir * parts.ppg),
     form: sign(dir * parts.form),
     fantasy: sign(dir * parts.fpg),
+    goals: sign(dir * parts.goals),
   });
 
   const score = clamp1(
     WEIGHTS.pos * parts.pos + WEIGHTS.ppg * parts.ppg +
-    WEIGHTS.form * parts.form + WEIGHTS.fpg * parts.fpg,
+    WEIGHTS.form * parts.form + WEIGHTS.fpg * parts.fpg +
+    WEIGHTS.goals * parts.goals,
   );
+
+  // Deliberately NOT folded into the tint. A fixture can read +405 scored and
+  // -405 conceded: the halves are drastically apart while the combined lead is
+  // level, and there would be no tint to make bold. Keeping the two orthogonal
+  // means the highlight can never contradict the 🎯 tag. A suppressed (null)
+  // half cannot be drastic. Reported per half so the tooltip can name which —
+  // the threshold itself never leaves this file.
+  const big = (g) => g != null && Math.abs(g) >= DRASTIC;
+  const drastic = { scored: big(scoredGap), conceded: big(concededGap) };
+  drastic.any = drastic.scored || drastic.conceded;
 
   const hit = GRADES.find(([min]) => Math.abs(score) >= min);
   let favoured = null;
@@ -183,6 +240,7 @@ export function compareFixture(ctx, match) {
         reason("points", dir * gaps.ppg, 2, "/game"),
         reason("form", formGap == null ? null : dir * formGap, 1),
         reason("fantasy", gaps.fpg == null ? null : dir * gaps.fpg, 1, "/game"),
+        clockReason(dir, scoredGap, concededGap),
       ],
     };
   }
@@ -190,6 +248,6 @@ export function compareFixture(ctx, match) {
   // than as a genuine tie — lead.fantasy is 0 for both cases.
   return {
     home: { ...home, lead: lead(1) }, away: { ...away, lead: lead(-1) },
-    score, parts, fantasyCovered, favoured,
+    score, parts, fantasyCovered, scoredGap, concededGap, drastic, favoured,
   };
 }
