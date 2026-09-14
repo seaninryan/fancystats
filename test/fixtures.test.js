@@ -218,8 +218,11 @@ describe("compareFixture", () => {
   });
 
   it("weighs position and points per game apart from one another", () => {
-    // parts.pos (2/3), parts.ppg (1) and parts.form (-2/3) are all different, so
-    // the total pins each weight individually: .18/.27/.27/.18.
+    // parts.pos and parts.form are equal and opposite here, so the total pins the
+    // ppg weight and the pos-form DIFFERENCE — not each of the four on its own
+    // (.20/.29 would give the identical 0.21). The other two are pinned where
+    // their part is the only non-zero one: fpg by the adjustment test below,
+    // goals by the clock tests at the foot of the file.
     const cmp = compareFixture(fixtureContext(sixRoundSeason()), upcoming(1, 3));
     expect(cmp.parts.pos).toBeCloseTo(2 / 3, 12);
     expect(cmp.parts.ppg).toBeCloseTo(1, 12);
@@ -353,9 +356,11 @@ describe("compareFixture", () => {
     expect(cmp.parts.ppg).toBeCloseTo(0.375, 12);  // per game says SHE
     expect(cmp.score).toBeGreaterThan(0);          // and per game wins the argument
     expect(cmp.score).toBeCloseTo(0.18 * (-1 / 3) + 0.27 * 0.375, 12);
-    // Under the old 0.30/0.20 split the same fixture scored the stronger club
-    // negative; the parts are weight-free, so this is that exact regression.
-    expect(0.3 * cmp.parts.pos + 0.2 * cmp.parts.ppg).toBeLessThan(0);
+    // With the split inverted — position weighted above its per-game twin, as it
+    // was before this was fixed — the same fixture scores the stronger club
+    // negative; the parts are weight-free, so this is that exact regression,
+    // stated against the weights actually in force.
+    expect(0.27 * cmp.parts.pos + 0.18 * cmp.parts.ppg).toBeLessThan(0);
   });
 
   it("ignores the fantasy column when either club has no fantasy points", () => {
@@ -405,6 +410,10 @@ describe("compareFixture", () => {
       [fixtureContext(unevenFormTables()), upcoming(2, 4)],
       [fixtureContext(unequalGames()), upcoming(1, 3)],
       [fixtureContext(noRecentResults()), upcoming(2, 3)],
+      // The one case with a live goals part — every other fixture here has empty
+      // goalTimes, so without it neither the 0.10 weight nor the ±1 bound on
+      // parts.goals is exercised. Defined with the clock tests below.
+      [fixtureContext(sharpVsBlunt()), pair()],
     ];
     for (const [ctx, m] of cases) {
       const c = compareFixture(ctx, m);
@@ -497,20 +506,20 @@ const sharpVsBlunt = () => clockRuns(
 describe("goal clocks in compareFixture", () => {
   it("reads both clocks onto both sides", () => {
     const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
-    expect(cmp.home.scoredAgo).toBe(10);        // 90 - 80
-    expect(cmp.home.scoredOpen).toBe(false);
-    expect(cmp.away.scoredAgo).toBe(405);       // 4 * 90 + (90 - 45)
-    expect(cmp.away.scoredOpen).toBe(false);
-    expect(cmp.home.concededAgo).toBe(405);     // last conceded on 45' of md1
-    expect(cmp.away.concededAgo).toBe(45);      // conceded on 45' of md5
-    expect(cmp.home.matches).toBe(5);
-    expect(cmp.away.matches).toBe(5);
+    expect(cmp.home.clock.scored.ago).toBe(10);        // 90 - 80
+    expect(cmp.home.clock.scored.open).toBe(false);
+    expect(cmp.away.clock.scored.ago).toBe(405);       // 4 * 90 + (90 - 45)
+    expect(cmp.away.clock.scored.open).toBe(false);
+    expect(cmp.home.clock.conceded.ago).toBe(405);     // last conceded on 45' of md1
+    expect(cmp.away.clock.conceded.ago).toBe(45);      // conceded on 45' of md5
+    expect(cmp.home.clock.matches).toBe(5);
+    expect(cmp.away.clock.matches).toBe(5);
   });
 
   it("signs both gaps from the home side and mirrors the lead", () => {
     const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
-    expect(cmp.scoredGap).toBe(395);   // away.scoredAgo - home.scoredAgo
-    expect(cmp.concededGap).toBe(360); // home.concededAgo - away.concededAgo
+    expect(cmp.scoredGap).toBe(395);   // away scored ago - home scored ago
+    expect(cmp.concededGap).toBe(360); // home conceded ago - away conceded ago
     expect(cmp.home.lead.goals).toBe(1);
     expect(cmp.away.lead.goals).toBe(-1);
   });
@@ -539,9 +548,9 @@ describe("goal clocks in compareFixture", () => {
       [G([], []), G([], []), G([], []), G([], []), G([90], [])],
       [G([], []), G([], []), G([], []), G([], []), G([], [])],
     )), pair());
-    expect(cmp.home.scoredAgo).toBe(0);
-    expect(cmp.away.scoredAgo).toBe(450);
-    expect(cmp.away.scoredOpen).toBe(true);
+    expect(cmp.home.clock.scored.ago).toBe(0);
+    expect(cmp.away.clock.scored.ago).toBe(450);
+    expect(cmp.away.clock.scored.open).toBe(true);
     expect(cmp.scoredGap).toBe(450);
     // Scored half maxes at 1; conceded half is suppressed (nobody conceded).
     expect(cmp.concededGap).toBe(null);
@@ -555,12 +564,12 @@ describe("goal clocks in compareFixture", () => {
       [G([], []), G([], [])],
       [G([], []), G([], []), G([], []), G([], []), G([], [])],
     )), pair());
-    expect(cmp.home.scoredOpen).toBe(true);
-    expect(cmp.away.scoredOpen).toBe(true);
-    expect(cmp.home.matches).toBe(2);
-    expect(cmp.away.matches).toBe(5);
-    expect(cmp.home.scoredAgo).toBe(180);
-    expect(cmp.away.scoredAgo).toBe(450);
+    expect(cmp.home.clock.scored.open).toBe(true);
+    expect(cmp.away.clock.scored.open).toBe(true);
+    expect(cmp.home.clock.matches).toBe(2);
+    expect(cmp.away.clock.matches).toBe(5);
+    expect(cmp.home.clock.scored.ago).toBe(180);
+    expect(cmp.away.clock.scored.ago).toBe(450);
     expect(cmp.scoredGap).toBe(null);   // NOT 270
     expect(cmp.concededGap).toBe(null);
     expect(cmp.parts.goals).toBe(0);
@@ -574,8 +583,8 @@ describe("goal clocks in compareFixture", () => {
       [G([45], []), G([45], []), G([45], []), G([45], []), G([45], [])],
       [G([], []), G([], []), G([], []), G([], []), G([], [])],
     )), pair());
-    expect(cmp.home.scoredOpen).toBe(false);
-    expect(cmp.away.scoredOpen).toBe(true);
+    expect(cmp.home.clock.scored.open).toBe(false);
+    expect(cmp.away.clock.scored.open).toBe(true);
     expect(cmp.scoredGap).toBe(405); // 450 - 45
     expect(cmp.scoredGap).not.toBe(null);
   });
@@ -627,19 +636,16 @@ describe("goal clocks in compareFixture", () => {
     expect(cmp.drastic).toEqual({ scored: true, conceded: true, any: true });
   });
 
-  it("reconstructs the score from the documented weights", () => {
-    const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
-    const { pos, ppg, form, fpg, goals } = cmp.parts;
-    expect(Number.isNaN(goals)).toBe(false);
-    // Reconstruct the score from the documented weights.
-    expect(cmp.score).toBeCloseTo(
-      0.18 * pos + 0.27 * ppg + 0.27 * form + 0.18 * fpg + 0.10 * goals, 10);
-  });
-
   it("adds a goals line to the tag's reasons, from the favoured club's view", () => {
     const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
     expect(cmp.favoured).not.toBe(null);
     expect(cmp.favoured.reasons).toContain("goals +395'/+360'");
+    // And with the clubs swapped. Every reason reads from the FAVOURED club, so
+    // the line must come out identical at dir === -1 — the one place a sign
+    // error in the two-value formatter could hide.
+    const swapped = compareFixture(fixtureContext(sharpVsBlunt()), upcoming(2, 1));
+    expect(swapped.favoured.teamId).toBe(cmp.favoured.teamId);
+    expect(swapped.favoured.reasons).toContain("goals +395'/+360'");
   });
 
   it("writes a suppressed half as — in the reasons, never NaN or +0", () => {

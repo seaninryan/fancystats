@@ -84,17 +84,32 @@ const DRASTIC = 2 * MATCH_MINUTES;
 // Guards the ±1 contract the GRADES table depends on. Neither call site can
 // exceed it today — both clubs in a fixture are rows of the table the spread and
 // the rank denominators are taken from, so |gap| <= denom, and the weights sum
-// to 1 — so this is a bound, not a live path, and no test can reach it.
+// to 1 — so this is a bound, not a live path, and no test can reach it. The
+// clocks are bounded for a different reason: a clock cannot run past its own
+// window and CAP *is* that window, so a goals half tops out at exactly 1 (a
+// fixture does reach it) without the clamp ever doing the work.
 const clamp1 = (v) => Math.max(-1, Math.min(1, v));
 // +1 / -1 / 0, never -0 (Object.is(-0, 0) is false, and callers compare to 0).
 const sign = (v) => (v > 0 ? 1 : v < 0 ? -1 : 0);
-// A gap normalised against the league's own spread. Zero spread -> no signal.
+// A gap normalised against its denominator — the league's own spread for the
+// per-game metrics, a fixed cap for the clocks. Zero denominator -> no signal.
 const norm = (gap, denom) => (denom > 0 ? clamp1(gap / denom) : 0);
 
 // Rank gap from the first club's perspective (a lower position is better). A
 // club can be absent from a form window, and an absent rank is not a number to
 // subtract: no rank on either side means no signal, same rule as a zero spread.
 const rankGap = (mine, theirs) => (mine == null || theirs == null ? null : theirs - mine);
+
+// The clock analogue of rankGap, and it exists for the same reason: an open
+// clock is a LOWER BOUND, not a value, so it is not a number to subtract. Two
+// open clocks differ only by how many matches of evidence each club has —
+// subtracting 180'+ from 450'+ manufactures a gap out of games played, and
+// lands often enough on DRASTIC to manufacture a highlight too. Same rule
+// fantasyCovered applies: a data gap is not a signal. One open against one
+// closed IS still compared — a documented, accepted limitation; do not widen
+// this. Takes the two halves whole rather than four loose numbers so a silent
+// transposition (which no test would catch) cannot be written.
+const clockGap = (mine, theirs) => (mine.open && theirs.open ? null : mine.ago - theirs.ago);
 
 // "+3", "-1.5". Rounds before taking the sign so a gap of -0.004 reads "+0.00"
 // rather than "-0.00".
@@ -135,11 +150,14 @@ function sideOf(ctx, teamId) {
     ppg: perGame(row.points, row.played),
     fantasy: row.fantasy,
     fpg: perGame(row.fantasy, row.played),
-    // Goal clocks. Named *Ago because `scored` below is the tie-aware rank block
-    // and has been since the fixture comparison shipped.
-    scoredAgo: c.scored, scoredOpen: c.scoredOpen,
-    concededAgo: c.conceded, concededOpen: c.concededOpen,
-    span: c.span, matches: c.matches,
+    // Goal clocks, nested: `scored` at this level is the tie-aware rank block
+    // below and has been since the fixture comparison shipped, so the minutes
+    // cannot live beside it without the word meaning two things at one depth.
+    clock: {
+      scored: { ago: c.scored, open: c.scoredOpen },
+      conceded: { ago: c.conceded, open: c.concededOpen },
+      span: c.span, matches: c.matches,
+    },
     // What the score is computed from: level clubs share a rank.
     scored: {
       pos: ctx.table.scored.get(teamId),
@@ -162,15 +180,10 @@ export function compareFixture(ctx, match) {
   // a 0.18-weight metric. A missing total is a data gap, not form.
   const fantasyCovered = home.fantasy !== 0 && away.fantasy !== 0;
 
-  // An open clock is a LOWER BOUND, not a value. Two open clocks differ only by
-  // how many matches of evidence each club has — subtracting 180'+ from 450'+
-  // manufactures a gap out of games played, and lands often enough on DRASTIC to
-  // manufacture a highlight too. Same rule fantasyCovered applies: a data gap is
-  // not a signal. One open against one closed IS still compared — a documented,
-  // accepted limitation; do not widen this.
-  const clockGap = (a, aOpen, b, bOpen) => (aOpen && bOpen ? null : a - b);
-  const scoredGap = clockGap(away.scoredAgo, away.scoredOpen, home.scoredAgo, home.scoredOpen);
-  const concededGap = clockGap(home.concededAgo, home.concededOpen, away.concededAgo, away.concededOpen);
+  // Both signed so that positive favours HOME: home scoring more recently is
+  // good for home, home conceding more recently is not.
+  const scoredGap = clockGap(away.clock.scored, home.clock.scored);
+  const concededGap = clockGap(home.clock.conceded, away.clock.conceded);
 
   const gaps = {
     pos: rankGap(home.scored.pos, away.scored.pos),
