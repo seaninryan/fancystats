@@ -500,12 +500,15 @@ export function teamGoalClocks(data, n = 5) {
   const out = new Map();
   for (const [tid, all] of byTeam) {
     all.sort((a, b) => a.kickoff - b.kickoff);
-    const window = all.slice(-n);
+    const recent = all.slice(-n);
     // Minutes back to the last goal in `pick`, walking newest match first.
+    // Takes the LAST entry of a goal list, which is the latest goal only because
+    // normalize() sorts goalTimes ascending — if that ever stops being true this
+    // reads the wrong minute silently.
     const clock = (pick) => {
       let mins = 0;
-      for (let i = window.length - 1; i >= 0; i--) {
-        const goals = pick(window[i]);
+      for (let i = recent.length - 1; i >= 0; i--) {
+        const goals = pick(recent[i]);
         if (goals.length) {
           const last = Math.min(MATCH_MINUTES, Math.max(0, goals[goals.length - 1]));
           return { value: mins + (MATCH_MINUTES - last), open: false };
@@ -521,8 +524,8 @@ export function teamGoalClocks(data, n = 5) {
     out.set(tid, {
       scored: s.value, scoredOpen: s.open,
       conceded: c.value, concededOpen: c.open,
-      span: window.length * MATCH_MINUTES,
-      matches: window.length,
+      span: recent.length * MATCH_MINUTES,
+      matches: recent.length,
     });
   }
   return out;
