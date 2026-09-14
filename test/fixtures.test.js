@@ -248,12 +248,21 @@ describe("compareFixture", () => {
     expect(strong.score).toBeCloseTo(0.28125, 12);             // just over 0.28
     expect(strong.favoured).toMatchObject({ grade: "strong", tag: "🎯🎯" });
 
-    const slight = compareFixture(six, upcoming(2, 1));
-    expect(slight.score).toBeCloseTo(0.27, 12);
+    // The slight band is pinned at BOTH ends, and the pair either side of 0.14
+    // is deliberately only 0.011 apart: a fixture chosen further from the line
+    // lets the threshold drift without failing anything (a 0.070-wide window of
+    // undetected drift, when this was first recalibrated for the goal-clock
+    // weights). Keep any replacement just as tight.
+    const slightTop = compareFixture(six, upcoming(2, 1));
+    expect(slightTop.score).toBeCloseTo(0.27, 12);             // just under 0.28
+    expect(slightTop.favoured).toMatchObject({ grade: "slight", tag: "🎯" });
+
+    const slight = compareFixture(uneven, upcoming(2, 5));
+    expect(slight.score).toBeCloseTo(0.1434375, 12);           // just over 0.14
     expect(slight.favoured).toMatchObject({ grade: "slight", tag: "🎯" });
 
-    const under = compareFixture(stale, upcoming(2, 5));
-    expect(under.score).toBeCloseTo(0.1096875, 12);            // real edge, under 0.14
+    const under = compareFixture(stale, upcoming(1, 5));
+    expect(under.score).toBeCloseTo(0.1321875, 12);            // real edge, under 0.14
     expect(under.favoured).toBeNull();
   });
 
@@ -521,9 +530,11 @@ describe("goal clocks in compareFixture", () => {
     expect(cmp.home.lead.goals).toBe(1);
   });
 
-  it("reaches exactly 1 on a maximal gap, and never exceeds it", () => {
+  it("reaches exactly 1 on the widest gap the window allows", () => {
     // SHE score on 90' of the latest match (0' ago); BOH never score at all
-    // across a full five-match window (450', open). The widest gap possible.
+    // across a full five-match window (450', open). The widest gap possible:
+    // 450' IS the cap, so `clamp1` here is a bound, not a live path — no fixture
+    // can push a half past 1 without the window and the cap drifting apart.
     const cmp = compareFixture(fixtureContext(clockRuns(
       [G([], []), G([], []), G([], []), G([], []), G([90], [])],
       [G([], []), G([], []), G([], []), G([], []), G([], [])],
@@ -616,7 +627,7 @@ describe("goal clocks in compareFixture", () => {
     expect(cmp.drastic).toEqual({ scored: true, conceded: true, any: true });
   });
 
-  it("keeps the weights summing to exactly 1", () => {
+  it("reconstructs the score from the documented weights", () => {
     const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
     const { pos, ppg, form, fpg, goals } = cmp.parts;
     expect(Number.isNaN(goals)).toBe(false);
