@@ -180,6 +180,10 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 /* A drastic divergence on either goal clock. Composes with any tint —
    cmp-up cmp-hot, cmp-down cmp-hot, or bare cmp-hot when the halves cancel. */
 .cmp-chips .chip.cmp-hot { font-weight: 700; box-shadow: inset 0 0 0 1px var(--warn); }
+/* --warn on --accent is 1.2:1 — a gold ring on a filled chip is invisible, and a
+   filled chip is the COMMON case here (a drastic gap usually means one club
+   leads the metric). White is 5.3:1 on --accent. */
+.cmp-chips .chip.cmp-up.cmp-hot { box-shadow: inset 0 0 0 1px #fff; }
 /* cmp-down fades to .55; a highlight that is simultaneously faded is not a
    highlight, so lift it back to readable. */
 .cmp-chips .chip.cmp-down.cmp-hot { opacity: .8; }

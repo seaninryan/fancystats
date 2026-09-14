@@ -226,10 +226,14 @@ export function compareFixture(ctx, match) {
   // level, and there would be no tint to make bold. Keeping the two orthogonal
   // means the highlight can never contradict the 🎯 tag. A suppressed (null)
   // half cannot be drastic. Reported per half so the tooltip can name which —
-  // the threshold itself never leaves this file.
+  // the threshold itself never leaves this file. `matches` is that threshold in
+  // the unit the tooltip quotes it in ("two matches apart"): the component
+  // renders this count rather than spelling the number out, so raising DRASTIC
+  // cannot leave the wording behind saying something the code no longer does.
   const big = (g) => g != null && Math.abs(g) >= DRASTIC;
   const drastic = { scored: big(scoredGap), conceded: big(concededGap) };
   drastic.any = drastic.scored || drastic.conceded;
+  drastic.matches = DRASTIC / MATCH_MINUTES;
 
   const hit = GRADES.find(([min]) => Math.abs(score) >= min);
   let favoured = null;

@@ -600,10 +600,10 @@ describe("goal clocks in compareFixture", () => {
     const hit = at(0);
     expect(hit.concededGap).toBe(0);
     expect(hit.scoredGap).toBe(180);
-    expect(hit.drastic).toEqual({ scored: true, conceded: false, any: true });
+    expect(hit.drastic).toEqual({ scored: true, conceded: false, any: true, matches: 2 });
     const miss = at(1);
     expect(miss.scoredGap).toBe(179);
-    expect(miss.drastic).toEqual({ scored: false, conceded: false, any: false });
+    expect(miss.drastic).toEqual({ scored: false, conceded: false, any: false, matches: 2 });
   });
 
   it("flags drastic on the clean-sheet half alone", () => {
@@ -616,7 +616,7 @@ describe("goal clocks in compareFixture", () => {
     )), pair());
     expect(cmp.scoredGap).toBe(0);
     expect(cmp.concededGap).toBe(-180); // home concedes far more recently
-    expect(cmp.drastic).toEqual({ scored: false, conceded: true, any: true });
+    expect(cmp.drastic).toEqual({ scored: false, conceded: true, any: true, matches: 2 });
   });
 
   it("flags drastic while the combined lead is level — the orthogonal case", () => {
@@ -633,7 +633,7 @@ describe("goal clocks in compareFixture", () => {
     expect(cmp.parts.goals).toBe(0);
     expect(cmp.home.lead.goals).toBe(0);
     expect(cmp.away.lead.goals).toBe(0);
-    expect(cmp.drastic).toEqual({ scored: true, conceded: true, any: true });
+    expect(cmp.drastic).toEqual({ scored: true, conceded: true, any: true, matches: 2 });
   });
 
   it("adds a goals line to the tag's reasons, from the favoured club's view", () => {

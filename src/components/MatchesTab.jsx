@@ -42,7 +42,8 @@ const deltaLabel = (d) => {
 };
 
 // Mirror a home-signed gap onto the away side. `null` (a suppressed half) stays
-// null; 0 stays 0 rather than becoming -0, which formats as "-0".
+// null. The 0 branch is belt and braces — deltaLabel already normalises -0 away,
+// as its own comment records — it just keeps the prop itself clean.
 const flip = (g) => (g == null ? null : g === 0 ? 0 : -g);
 
 // Tint straight from lib's verdict on who leads the metric: +1 leads, -1 trails,
@@ -164,38 +165,54 @@ const HALVES = {
     noun: "scoring", none: "neither club has scored inside their window",
     ahead: "more recently", behind: "longer without scoring",
   },
+  // "clean sheets" would be a count; this half measures minutes since the last
+  // goal conceded. And "unbeaten" means undefeated, which a club can be while
+  // conceding every week — say only what the clock measures.
   conceded: {
-    noun: "clean sheets", none: "neither club has conceded inside their window",
-    ahead: "longer unbeaten at the back", behind: "less time since conceding",
+    noun: "time since conceding", none: "neither club has conceded inside their window",
+    ahead: "longer without conceding", behind: "less time since conceding",
   },
 };
 const halfPhrase = (gap, key) => {
   const w = HALVES[key];
   if (gap == null) return `${w.noun} not compared: ${w.none}`;
   if (gap === 0) return `level on ${w.noun}`;
-  return `${Math.abs(gap)}' ${gap > 0 ? w.ahead : w.behind}`;
+  return `${num(Math.abs(gap))}' ${gap > 0 ? w.ahead : w.behind}`;
 };
 
 // Names WHICH halves crossed the threshold — a highlight the reader cannot
-// attribute is noise. The threshold itself lives only in fixtures.js.
+// attribute is noise. The threshold itself lives only in fixtures.js, which
+// hands over its own match count rather than letting this prose fork from it.
+// `plural()` would say "matchs", hence the inline form — as swapTitle does.
 const drasticClause = (drastic) => {
   const hits = [drastic.scored && "scoring", drastic.conceded && "clean-sheet"].filter(Boolean);
   if (!hits.length) return "";
-  return `; ${hits.length === 2 ? "both gaps" : `${hits[0]} gap`} drastic (two matches apart)`;
+  const n = drastic.matches;
+  return `; ${hits.length === 2 ? "both gaps" : `${hits[0]} gap`} drastic`
+    + ` (${n} match${n === 1 ? "" : "es"} apart)`;
 };
+
+const matchCount = (n) => `${n} match${n === 1 ? "" : "es"}`;
 
 const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
   const mine = `goal clock: last scored ${clockLabel(side.clock.scored)} ago,`
     + ` last conceded ${clockLabel(side.clock.conceded)} ago`;
-  // Say how much evidence each clock rests on when the two clubs differ — the
-  // same honesty gamesClause gives the points chip.
-  const span = side.clock.matches === opp.clock.matches
-    ? ` (last ${side.clock.matches})`
-    : ` (last ${side.clock.matches} v ${oppName} ${opp.clock.matches})`;
   const theirs = ` v ${oppName} ${clockLabel(opp.clock.scored)}`
     + ` / ${clockLabel(opp.clock.conceded)}`;
-  const body = `${halfPhrase(scoredGap, "scored")}, ${halfPhrase(concededGap, "conceded")}`;
-  return `${mine}${span}${theirs} — ${body}${drasticClause(drastic)}`;
+  // Say how much evidence each clock rests on when the two clubs differ — the
+  // same honesty gamesClause gives the points chip. It trails the opponent's
+  // figures rather than splitting them from `mine`, so its own "v their 2" does
+  // not collide with the "v BOH" that introduces them; and it names the unit,
+  // so a bare count never reads as more minutes.
+  const span = side.clock.matches === opp.clock.matches
+    ? ` (last ${matchCount(side.clock.matches)})`
+    : ` (last ${matchCount(side.clock.matches)} v their ${opp.clock.matches})`;
+  // Both halves suppressed is one fact, not two: spelling it out twice makes the
+  // page's longest tooltip out of the case that says the least.
+  const body = scoredGap == null && concededGap == null
+    ? "not compared: neither club has scored or conceded inside their windows"
+    : `${halfPhrase(scoredGap, "scored")}, ${halfPhrase(concededGap, "conceded")}`;
+  return `${mine}${theirs}${span} — ${body}${drasticClause(drastic)}`;
 };
 
 // Team pill that navigates to the club on the Teams tab.
