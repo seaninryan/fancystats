@@ -8,7 +8,7 @@ import {
   playerName, missingFantasyData, setTeamColor, roundSuspects,
   isHot, allMatchTeamPoints,
   setAbsence, getAbsence, playerOutNow,
-  teamWindowEventIds, leagueTable, leagueOrder,
+  teamWindowEventIds, leagueTable, leagueOrder, teamGoalClocks,
   hotEventIds,
   playerClimb,
   teamSitePoints,
@@ -1073,5 +1073,145 @@ describe("removeFantasyOnlyPlayer", () => {
     let d = addFantasyOnlyPlayers(importedFixture(), [GHOST_ROW], NOW);
     d.appearances["100:fx-danny-mandroiu-1"] = { eventId: 100, playerId: "fx-danny-mandroiu-1", teamId: 1, started: true, minutes: 90, goals: 0, assists: 0, yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0 };
     expect(removeFantasyOnlyPlayer(d, "fx-danny-mandroiu-1")).toBe(d);
+  });
+});
+
+// Goal-clock fixtures. `hg`/`ag` are goal minutes; hs/as default to their
+// length, and null scores model an imported-but-unplayed event.
+function clockSeed(results) {
+  let d = emptyData();
+  for (const r of results) {
+    d = applyImport(d, {
+      match: {
+        eventId: r.eventId, round: r.round ?? 1, kickoff: r.kickoff, status: "finished",
+        homeTeamId: r.home, awayTeamId: r.away,
+        homeScore: "hs" in r ? r.hs : (r.hg ?? []).length,
+        awayScore: "as" in r ? r.as : (r.ag ?? []).length,
+        goalTimes: { home: r.hg ?? [], away: r.ag ?? [] },
+        partial: false,
+      },
+      teams: [
+        { id: 1, name: "Shelbourne", shortName: "SHE" },
+        { id: 2, name: "Bohemians", shortName: "BOH" },
+        { id: 3, name: "Derry City", shortName: "DER" },
+      ].filter((t) => t.id === r.home || t.id === r.away),
+      players: [], appearances: [],
+    }, NOW);
+  }
+  return d;
+}
+
+const DAY = 86400000;
+const day = (n) => NOW - n * DAY;
+
+describe("teamGoalClocks", () => {
+  it("measures from the end of the last match, not from now", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [70], ag: [20] },
+    ]));
+    expect(c.get(1).scored).toBe(20);    // 90 - 70
+    expect(c.get(1).conceded).toBe(70);  // 90 - 20
+    expect(c.get(1).scoredOpen).toBe(false);
+    expect(c.get(1).concededOpen).toBe(false);
+  });
+
+  it("adds a full 90 for each goalless match walked back through", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [30], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hg: [], ag: [] },
+    ]));
+    expect(c.get(1).scored).toBe(150); // 90 (event 2) + (90 - 30)
+  });
+
+  it("clamps a stoppage-time goal to 0, never negative", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [94], ag: [] },
+    ]));
+    expect(c.get(1).scored).toBe(0);
+  });
+
+  it("reads conceded from the opponent's list when the club is away", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [10], ag: [80] },
+    ]));
+    expect(c.get(2).scored).toBe(10);   // BOH scored on 80'
+    expect(c.get(2).conceded).toBe(80); // SHE scored on 10'
+  });
+
+  it("takes the last goal, not the first, when a match has several", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [5, 60, 85], ag: [] },
+    ]));
+    expect(c.get(1).scored).toBe(5); // 90 - 85
+  });
+
+  it("reports an open clock as the minutes actually observed, not the ceiling", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hg: [], ag: [] },
+    ]));
+    expect(c.get(1).scoredOpen).toBe(true);
+    expect(c.get(1).scored).toBe(180); // 2 matches of evidence, NOT 450
+    expect(c.get(1).span).toBe(180);
+    expect(c.get(1).matches).toBe(2);
+  });
+
+  it("excludes a null-scored import: no minutes, and no window slot", () => {
+    // Six matches, the most recent unplayed. The window must hold the five
+    // scored ones, so the 20' goal in event 1 stays inside it.
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [20], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 3, kickoff: day(7), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 4, kickoff: day(6), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 5, kickoff: day(5), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 6, kickoff: day(4), home: 1, away: 2, hs: null, as: null },
+    ]));
+    expect(c.get(1).matches).toBe(5);
+    expect(c.get(1).span).toBe(450);
+    expect(c.get(1).scored).toBe(430); // 4 * 90 + (90 - 20)
+    expect(c.get(1).scoredOpen).toBe(false);
+  });
+
+  it("windows to the last n matches and forgets anything older", () => {
+    // A goal six matches ago is outside a five-match window.
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [45], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 3, kickoff: day(7), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 4, kickoff: day(6), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 5, kickoff: day(5), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 6, kickoff: day(4), home: 1, away: 2, hg: [], ag: [] },
+    ]));
+    expect(c.get(1).matches).toBe(5);
+    expect(c.get(1).scoredOpen).toBe(true);
+    expect(c.get(1).scored).toBe(450);
+  });
+
+  it("honours the n argument", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [45], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hg: [], ag: [] },
+      { eventId: 3, kickoff: day(7), home: 1, away: 2, hg: [], ag: [] },
+    ]), 2);
+    expect(c.get(1).matches).toBe(2);
+    expect(c.get(1).scored).toBe(180);
+    expect(c.get(1).scoredOpen).toBe(true);
+  });
+
+  it("gives a club with no qualifying matches no entry at all", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hs: null, as: null },
+    ]));
+    expect(c.has(1)).toBe(false);
+    expect(c.has(2)).toBe(false);
+  });
+
+  it("keys by teamId as a number, matching the record fields", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [70], ag: [] },
+    ]));
+    expect(c.has(1)).toBe(true);
+    expect(c.has("1")).toBe(false);
   });
 });

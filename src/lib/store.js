@@ -460,6 +460,74 @@ export function teamWindowEventIds(data, n) {
   return out;
 }
 
+// How long since each club last scored, and last conceded, in MATCH minutes.
+//
+// Each match is a flat 90 minutes and goal minutes clamp to [0, 90]: SofaScore
+// records stoppage-time goals as time + addedTime (90+4 -> 94) and never reports
+// a reliable match end, so a fixed 90 keeps the ceiling exact at 90n and every
+// club on one scale. The clock is anchored to the END OF THE LAST MATCH PLAYED,
+// never to wall-clock now — a number that drifts every hour cannot be compared
+// between two clubs whose last fixtures were on different days.
+//
+// A club's scored goals are its own goalTimes side and its conceded goals are
+// the opponent's; normalize() already credits an own goal to the benefiting
+// side, so both lists are correct as they stand.
+//
+// The imported-AND-scored filter is applied BEFORE taking the last n, and that
+// is deliberate — do not "fix" it into agreement with teamWindowEventIds. That
+// helper windows on imported-only and lets leagueTable discard null-scored
+// matches afterwards, so leagueTable(data, 5) can cover fewer than five played
+// games. The clock wants n matches of actual evidence. The two helpers answer
+// different questions.
+//
+// -> Map<teamId (number), { scored, conceded, scoredOpen, concededOpen, span, matches }>
+// An OPEN clock (no such goal anywhere in the window) reports the minutes
+// actually observed, not the nominal ceiling: a club with two matches in the
+// window has 180 minutes of evidence, and reporting 450 would invent three
+// matches that were never played. Callers must treat an open clock as a lower
+// bound (see fixtures.js).
+export const MATCH_MINUTES = 90;
+
+export function teamGoalClocks(data, n = 5) {
+  const byTeam = new Map();
+  for (const m of Object.values(data.matches)) {
+    if (!m.importedAt || !m.goalTimes || m.homeScore == null || m.awayScore == null) continue;
+    for (const tid of [m.homeTeamId, m.awayTeamId]) {
+      if (!byTeam.has(tid)) byTeam.set(tid, []);
+      byTeam.get(tid).push(m);
+    }
+  }
+  const out = new Map();
+  for (const [tid, all] of byTeam) {
+    all.sort((a, b) => a.kickoff - b.kickoff);
+    const window = all.slice(-n);
+    // Minutes back to the last goal in `pick`, walking newest match first.
+    const clock = (pick) => {
+      let mins = 0;
+      for (let i = window.length - 1; i >= 0; i--) {
+        const goals = pick(window[i]);
+        if (goals.length) {
+          const last = Math.min(MATCH_MINUTES, Math.max(0, goals[goals.length - 1]));
+          return { value: mins + (MATCH_MINUTES - last), open: false };
+        }
+        mins += MATCH_MINUTES;
+      }
+      return { value: mins, open: true };
+    };
+    const own = (m) => (m.homeTeamId === tid ? m.goalTimes.home : m.goalTimes.away);
+    const opp = (m) => (m.homeTeamId === tid ? m.goalTimes.away : m.goalTimes.home);
+    const s = clock(own);
+    const c = clock(opp);
+    out.set(tid, {
+      scored: s.value, scoredOpen: s.open,
+      conceded: c.value, concededOpen: c.open,
+      span: window.length * MATCH_MINUTES,
+      matches: window.length,
+    });
+  }
+  return out;
+}
+
 // teamId -> { site, withData, missing }: sum of the team's players' official
 // fantasy-site totals plus paste coverage, for the Table tab's FPts cross-check.
 export function teamSitePoints(data) {
