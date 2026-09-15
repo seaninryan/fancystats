@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { emptyData } from "../src/lib/store.js";
-import SettingsTab from "../src/components/SettingsTab.jsx";
+import SettingsTab, { appliedMessage } from "../src/components/SettingsTab.jsx";
 
 const data = () => ({ ...emptyData(), teams: { 1: { name: "Bohemians", shortName: "BOH" } } });
 
@@ -30,5 +30,15 @@ describe("SettingsTab SSR", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
     expect(html).toContain("<details");
     expect(html).not.toContain("<details open"); // shipped closed
+  });
+});
+
+describe("appliedMessage", () => {
+  it("names which of the five imports landed", () => {
+    expect(appliedMessage(180, "price")).toBe("Updated 180 players — prices");
+    expect(appliedMessage(22, "GK")).toBe("Updated 22 players — goalkeeper positions");
+    expect(appliedMessage(60, "DEF")).toBe("Updated 60 players — defender positions");
+    expect(appliedMessage(70, "MID")).toBe("Updated 70 players — midfielder positions");
+    expect(appliedMessage(40, "FWD")).toBe("Updated 40 players — forward positions");
   });
 });

@@ -5,22 +5,34 @@ import { applyPasteResults } from "../lib/store.js";
 import UnmatchedLinks from "./UnmatchedLinks.jsx";
 import FantasyImport from "./FantasyImport.jsx";
 import ConsoleImport from "./ConsoleImport.jsx";
+import Flash from "./Flash.jsx";
 
 const KINDS = [
-  ["price", "Prices (Statistic = Value, Position = All)"],
-  ["GK", "Positions — Goalkeepers"], ["DEF", "Positions — Defenders"],
-  ["MID", "Positions — Midfielders"], ["FWD", "Positions — Forwards"],
+  ["price", "Prices (Statistic = Value, Position = All)", "prices"],
+  ["GK", "Positions — Goalkeepers", "goalkeeper positions"],
+  ["DEF", "Positions — Defenders", "defender positions"],
+  ["MID", "Positions — Midfielders", "midfielder positions"],
+  ["FWD", "Positions — Forwards", "forward positions"],
 ];
+
+// Five near-identical imports share this card, so the confirmation has to say which
+// one landed.
+export function appliedMessage(count, kind) {
+  const short = (KINDS.find(([k]) => k === kind) || [])[2] || kind;
+  return `Updated ${count} players — ${short}`;
+}
 
 export default function SettingsTab({ data, update }) {
   const [kind, setKind] = useState("price");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState(null); // { matched, unmatched, links: {idx: playerId} }
+  const [flash, setFlash] = useState(null);
 
   const parse = () => {
     const rows = parsePaste(text);
     const { matched, unmatched } = matchPlayers(rows, data.players);
     setPreview({ matched, unmatched, links: {} });
+    setFlash(null);
   };
 
   const apply = () => {
@@ -30,6 +42,8 @@ export default function SettingsTab({ data, update }) {
       .map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
     const now = Date.now();
     update((d) => applyPasteResults(d, [...preview.matched, ...linked], kind, now));
+    // counted before the preview is cleared — it's the only source for this number
+    setFlash(appliedMessage(preview.matched.length + linked.length, kind));
     setPreview(null); setText("");
   };
 
@@ -47,13 +61,13 @@ export default function SettingsTab({ data, update }) {
           select the whole results table, copy, and paste here.
         </p>
         <div className="row">
-          <select value={kind} onChange={(e) => { setKind(e.target.value); setPreview(null); }}>
+          <select value={kind} onChange={(e) => { setKind(e.target.value); setPreview(null); setFlash(null); }}>
             {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </select>
         </div>
         <textarea rows={6} style={{ width: "100%", marginTop: 8 }} value={text}
           placeholder="Padraig Amond	10&#10;Michael Duffy	10&#10;…"
-          onChange={(e) => { setText(e.target.value); setPreview(null); }} />
+          onChange={(e) => { setText(e.target.value); setPreview(null); setFlash(null); }} />
         <div className="row" style={{ marginTop: 8 }}>
           <button onClick={parse} disabled={!text.trim()}>Parse</button>
           {preview && (
@@ -62,6 +76,7 @@ export default function SettingsTab({ data, update }) {
             </button>
           )}
         </div>
+        <Flash message={flash} onDone={() => setFlash(null)} />
         {preview && (
           <div style={{ marginTop: 8 }}>
             <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched</p>
