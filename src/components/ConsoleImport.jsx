@@ -48,8 +48,12 @@ export default function ConsoleImport({ data, update }) {
       const now = Date.now();
       update((d) => applyDecoded(d, decoded, now));
       setPaste("");
-      setFlash(`Imported ${decoded.results.length} match(es)${decoded.failed.length ? `, ${decoded.failed.length} failed` : ""}.`);
-      if (decoded.failed.length) setError(decoded.failed.map((f) => `${f.id}: ${f.error}`).join("; "));
+      setFlash(`Imported ${decoded.results.length} match(es).`);
+      // the count rides the red banner, not the green one — a success-tinted
+      // message shouldn't be the thing telling you something failed
+      if (decoded.failed.length) {
+        setError(`${decoded.failed.length} failed — ${decoded.failed.map((f) => `${f.id}: ${f.error}`).join("; ")}`);
+      }
     } catch (e) {
       setError(e.message);
     }

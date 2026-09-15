@@ -16,10 +16,11 @@ const KINDS = [
 ];
 
 // Five near-identical imports share this card, so the confirmation has to say which
-// one landed.
+// one landed. "Applied", not "Updated": applyPasteResults skips a player whose
+// gamePositionSource is "manual", so rows submitted is not rows changed.
 export function appliedMessage(count, kind) {
   const short = (KINDS.find(([k]) => k === kind) || [])[2] || kind;
-  return `Updated ${count} players — ${short}`;
+  return `Applied ${count} players — ${short}`;
 }
 
 export default function SettingsTab({ data, update }) {

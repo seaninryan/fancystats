@@ -14,10 +14,14 @@ export function copyLabel(state, idle) {
 export default function CopyButton({ text, disabled, children }) {
   const [state, setState] = useState("idle");
   const timer = useRef(null);
+  const mounted = useRef(true);
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => () => { mounted.current = false; clearTimeout(timer.current); }, []);
 
+  // writeText can resolve after the card unmounts, so the guard has to sit here
+  // rather than only in the unmount cleanup.
   const flash = (next) => {
+    if (!mounted.current) return;
     clearTimeout(timer.current);
     setState(next);
     timer.current = setTimeout(() => setState("idle"), HOLD[next]);

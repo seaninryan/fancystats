@@ -35,10 +35,10 @@ describe("SettingsTab SSR", () => {
 
 describe("appliedMessage", () => {
   it("names which of the five imports landed", () => {
-    expect(appliedMessage(180, "price")).toBe("Updated 180 players — prices");
-    expect(appliedMessage(22, "GK")).toBe("Updated 22 players — goalkeeper positions");
-    expect(appliedMessage(60, "DEF")).toBe("Updated 60 players — defender positions");
-    expect(appliedMessage(70, "MID")).toBe("Updated 70 players — midfielder positions");
-    expect(appliedMessage(40, "FWD")).toBe("Updated 40 players — forward positions");
+    expect(appliedMessage(180, "price")).toBe("Applied 180 players — prices");
+    expect(appliedMessage(22, "GK")).toBe("Applied 22 players — goalkeeper positions");
+    expect(appliedMessage(60, "DEF")).toBe("Applied 60 players — defender positions");
+    expect(appliedMessage(70, "MID")).toBe("Applied 70 players — midfielder positions");
+    expect(appliedMessage(40, "FWD")).toBe("Applied 40 players — forward positions");
   });
 });

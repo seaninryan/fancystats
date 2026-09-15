@@ -9,6 +9,8 @@ describe("Flash SSR", () => {
     expect(html).toContain("Imported 6 match(es).");
     expect(html).toContain("banner ok");
     expect(html).toContain("flash"); // carries the fade animation
+    // it self-dismisses in 5s, so a screen reader has to be told it appeared
+    expect(html).toContain('role="status"');
   });
   it("renders nothing when there is no message", () => {
     expect(renderToStaticMarkup(<Flash message={null} onDone={() => {}} />)).toBe("");
