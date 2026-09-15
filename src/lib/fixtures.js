@@ -109,7 +109,24 @@ const rankGap = (mine, theirs) => (mine == null || theirs == null ? null : their
 // closed IS still compared — a documented, accepted limitation; do not widen
 // this. Takes the two halves whole rather than four loose numbers so a silent
 // transposition (which no test would catch) cannot be written.
-const clockGap = (mine, theirs) => (mine.open && theirs.open ? null : mine.ago - theirs.ago);
+// An unknown clock (`ago: null`) is not a number to subtract either, and unlike
+// an open clock it has no lower bound at all — see NO_CLOCK.
+const clockGap = (mine, theirs) =>
+  mine.ago == null || theirs.ago == null || (mine.open && theirs.open)
+    ? null
+    : mine.ago - theirs.ago;
+
+// A club whose matches all failed teamGoalClocks' goal-time count check has no
+// clock at all — not a clock of zero. Shaped so the existing suppression does
+// the work: both halves read as open with a null `ago`, so every gap is null,
+// parts.goals is 0 and drastic is false, exactly as fantasyCovered does for a
+// missing fantasy total. `known` is for the tooltip, which must say the data is
+// missing rather than quote a number nobody recorded.
+const NO_CLOCK = {
+  scored: { ago: null, open: true },
+  conceded: { ago: null, open: true },
+  matches: 0, known: false,
+};
 
 // "+3", "-1.5". Rounds before taking the sign so a gap of -0.004 reads "+0.00"
 // rather than "-0.00".
@@ -134,10 +151,12 @@ function sideOf(ctx, teamId) {
   const row = ctx.rows.get(teamId);
   if (!row) return null; // no imported matches -> nothing to compare
   // ctx.clocks is keyed by teamId as a NUMBER; teamId here is a string (record
-  // fields are numbers, object keys are strings — see CLAUDE.md). Every club in
-  // the league table has a clock, so the fallback is unreachable defence.
-  const c = ctx.clocks.get(Number(teamId))
-    ?? { scored: 0, scoredOpen: true, conceded: 0, concededOpen: true, span: 0, matches: 0 };
+  // fields are numbers, object keys are strings — see CLAUDE.md). A club in the
+  // league table can genuinely have no clock: leagueTable counts a match whose
+  // score is real, while teamGoalClocks additionally needs the goal times to
+  // account for that score, and an incidents-404 import has the one without the
+  // other.
+  const c = ctx.clocks.get(Number(teamId));
   return {
     teamId,
     // What the user sees, and what the Table tab agrees with.
@@ -153,11 +172,13 @@ function sideOf(ctx, teamId) {
     // Goal clocks, nested: `scored` at this level is the tie-aware rank block
     // below and has been since the fixture comparison shipped, so the minutes
     // cannot live beside it without the word meaning two things at one depth.
-    clock: {
-      scored: { ago: c.scored, open: c.scoredOpen },
-      conceded: { ago: c.conceded, open: c.concededOpen },
-      span: c.span, matches: c.matches,
-    },
+    clock: c
+      ? {
+        scored: { ago: c.scored, open: c.scoredOpen },
+        conceded: { ago: c.conceded, open: c.concededOpen },
+        matches: c.matches, known: true,
+      }
+      : NO_CLOCK,
     // What the score is computed from: level clubs share a rank.
     scored: {
       pos: ctx.table.scored.get(teamId),

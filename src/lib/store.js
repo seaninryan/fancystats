@@ -480,18 +480,34 @@ export function teamWindowEventIds(data, n) {
 // games. The clock wants n matches of actual evidence. The two helpers answer
 // different questions.
 //
-// -> Map<teamId (number), { scored, conceded, scoredOpen, concededOpen, span, matches }>
+// -> Map<teamId (number), { scored, conceded, scoredOpen, concededOpen, matches }>
 // An OPEN clock (no such goal anywhere in the window) reports the minutes
 // actually observed, not the nominal ceiling: a club with two matches in the
 // window has 180 minutes of evidence, and reporting 450 would invent three
 // matches that were never played. Callers must treat an open clock as a lower
 // bound (see fixtures.js).
+//
+// A club can end up with NO entry at all. That is a real state, not an error —
+// see the goal-time count check below — and fixtures.js renders it as missing
+// data rather than as a clock of zero.
 export const MATCH_MINUTES = 90;
 
 export function teamGoalClocks(data, n = 5) {
   const byTeam = new Map();
   for (const m of Object.values(data.matches)) {
     if (!m.importedAt || !m.goalTimes || m.homeScore == null || m.awayScore == null) continue;
+    // The goal times must account for the whole scoreline. fetchMatch degrades a
+    // 404 on /incidents into `{ incidents: [] }` while keeping the event
+    // payload's real scores, so a 3-0 win can be stored with an empty goalTimes:
+    // three goals we cannot place in time. Counting it would hand both clubs 90
+    // goalless minutes and a clean sheet nobody kept, then state it in a bolded
+    // tooltip the Table tab flatly contradicts. A goal we cannot place in time is
+    // evidence we do not have.
+    //
+    // This deliberately does NOT affect leagueTable: the score is real, so the
+    // match still counts for the table. Only the TIMING is unknown. That split is
+    // the whole point — do not copy this check over there.
+    if (m.goalTimes.home.length + m.goalTimes.away.length !== m.homeScore + m.awayScore) continue;
     for (const tid of [m.homeTeamId, m.awayTeamId]) {
       if (!byTeam.has(tid)) byTeam.set(tid, []);
       byTeam.get(tid).push(m);
@@ -502,15 +518,14 @@ export function teamGoalClocks(data, n = 5) {
     all.sort((a, b) => a.kickoff - b.kickoff);
     const recent = all.slice(-n);
     // Minutes back to the last goal in `pick`, walking newest match first.
-    // Takes the LAST entry of a goal list, which is the latest goal only because
-    // normalize() sorts goalTimes ascending — if that ever stops being true this
-    // reads the wrong minute silently.
+    // Math.max rather than the last entry: the clamp makes it order-independent,
+    // so this does not quietly depend on normalize() sorting goalTimes.
     const clock = (pick) => {
       let mins = 0;
       for (let i = recent.length - 1; i >= 0; i--) {
         const goals = pick(recent[i]);
         if (goals.length) {
-          const last = Math.min(MATCH_MINUTES, Math.max(0, goals[goals.length - 1]));
+          const last = Math.min(MATCH_MINUTES, Math.max(0, ...goals));
           return { value: mins + (MATCH_MINUTES - last), open: false };
         }
         mins += MATCH_MINUTES;
@@ -524,7 +539,6 @@ export function teamGoalClocks(data, n = 5) {
     out.set(tid, {
       scored: s.value, scoredOpen: s.open,
       conceded: c.value, concededOpen: c.open,
-      span: recent.length * MATCH_MINUTES,
       matches: recent.length,
     });
   }

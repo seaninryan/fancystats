@@ -1152,7 +1152,6 @@ describe("teamGoalClocks", () => {
     ]));
     expect(c.get(1).scoredOpen).toBe(true);
     expect(c.get(1).scored).toBe(180); // 2 matches of evidence, NOT 450
-    expect(c.get(1).span).toBe(180);
     expect(c.get(1).matches).toBe(2);
   });
 
@@ -1168,9 +1167,45 @@ describe("teamGoalClocks", () => {
       { eventId: 6, kickoff: day(4), home: 1, away: 2, hs: null, as: null },
     ]));
     expect(c.get(1).matches).toBe(5);
-    expect(c.get(1).span).toBe(450);
     expect(c.get(1).scored).toBe(430); // 4 * 90 + (90 - 20)
     expect(c.get(1).scoredOpen).toBe(false);
+  });
+
+  it("excludes a match whose goal times do not account for its score", () => {
+    // An incidents-404 import: fetchMatch keeps the event payload's real score
+    // and degrades the missing incidents to an empty list, so three goals exist
+    // that we cannot place in time. Counting it would hand both clubs 90
+    // goalless minutes and a clean sheet nobody kept.
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hg: [20], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hs: 3, as: 0, hg: [], ag: [] },
+    ]));
+    // Only the first match survives, so the 20' goal is still the latest one.
+    expect(c.get(1).matches).toBe(1);
+    expect(c.get(1).scored).toBe(70); // 90 - 20, NOT 90 + 70
+    expect(c.get(1).concededOpen).toBe(true);
+    expect(c.get(1).conceded).toBe(90); // one match of evidence, not two
+  });
+
+  it("gives a club with no timeable match no entry at all", () => {
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hs: 3, as: 0, hg: [], ag: [] },
+    ]));
+    expect(c.has(1)).toBe(false);
+    expect(c.has(2)).toBe(false);
+  });
+
+  it("keeps a real goalless draw, where the counts agree at zero", () => {
+    // The mirror of the case above: 0-0 with no goal times is CONSISTENT, and
+    // the filter must not mistake an honest clean sheet for a data gap.
+    const c = teamGoalClocks(clockSeed([
+      { eventId: 1, kickoff: day(9), home: 1, away: 2, hs: 0, as: 0, hg: [], ag: [] },
+      { eventId: 2, kickoff: day(8), home: 1, away: 2, hs: 0, as: 0, hg: [], ag: [] },
+    ]));
+    expect(c.get(1).matches).toBe(2);
+    expect(c.get(1).scoredOpen).toBe(true);
+    expect(c.get(1).scored).toBe(180);
+    expect(c.get(1).concededOpen).toBe(true);
   });
 
   it("windows to the last n matches and forgets anything older", () => {

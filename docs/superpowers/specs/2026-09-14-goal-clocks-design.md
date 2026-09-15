@@ -89,6 +89,34 @@ an open clock with a trailing `+` (`450'+`), and where the two clubs' `span`
 differ the tooltip says so — the same honesty `gamesClause` already provides for
 the points chip.
 
+### The goal times must account for the score
+
+A match is excluded unless `goalTimes.home.length + goalTimes.away.length`
+equals `homeScore + awayScore`.
+
+`fetchMatch` degrades a **404 on `/incidents`** into `{ incidents: [] }` while
+keeping the event payload's real scores, so a 3-0 win can be stored with an
+empty `goalTimes`: three goals that exist but cannot be placed in time. Without
+this check such a match donates 90 goalless minutes to both clubs and a clean
+sheet nobody kept — then states it in a bolded tooltip the Table tab flatly
+contradicts. **A goal we cannot place in time is evidence we do not have.**
+
+This deliberately does **not** apply to `leagueTable`: the score is real, so the
+match still counts for the table. Only the *timing* is unknown. That split is
+the point — do not copy the check over there.
+
+A real 0-0 draw passes: the counts agree at zero, and an honest clean sheet must
+not be mistaken for a data gap.
+
+### No clock at all
+
+A club whose every match fails that check has **no clock**, which is different
+from a clock of zero. `sideOf` gives it `NO_CLOCK` — both halves open with a
+null `ago` — so the existing suppression does the work: every gap is `null`,
+`parts.goals` is 0, `drastic` is all false. The chip renders neutral and its
+tooltip says the data is missing, naming *whose* it is, exactly as the fantasy
+chip does. It must never quote a number nobody recorded.
+
 A club with no qualifying matches has no entry in the map. `compareFixture`
 already returns `null` for the whole fixture when either club is missing from
 the league table, so this case never reaches the chip.

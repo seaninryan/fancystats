@@ -397,6 +397,15 @@ const sharpVsBlunt = () => fixture(seed([
   { eventId: 505, round: 5, kickoff: ago(5), home: 1, away: 2, hs: 1, as: 0, hg: [80], ag: [] },
 ]), { round: 6 });
 
+// Two real goalless draws: the scores and the (absent) goal times agree at zero,
+// so these matches ARE timeable and both clubs carry a genuine open clock. The
+// distinction from seeded() — whose 3-0 has goals the import could not place in
+// time — is the whole point of the goal-time count check in teamGoalClocks.
+const goalless = () => fixture(seed([
+  { eventId: 531, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 0, as: 0 },
+  { eventId: 532, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 0, as: 0 },
+]), { round: 3 });
+
 describe("MatchesTab goal clocks", () => {
   it("shows both clocks as one mirrored chip", () => {
     const { home, away } = upcoming(sharpVsBlunt());
@@ -428,21 +437,37 @@ describe("MatchesTab goal clocks", () => {
   });
 
   it("calls two open clocks not compared, never level", () => {
-    // The stock fixtures carry no goal times at all, so every clock is open.
-    const { home, away, row } = upcoming(seeded());
+    const { home, away, row } = upcoming(goalless());
     expect(clock(home)).toEqual({ scored: "—", conceded: "—" });
     expect(clock(away)).toEqual({ scored: "—", conceded: "—" });
     expect(home).toContain("not compared: neither club has scored or conceded inside their windows");
-    expect(home).not.toContain("level on");
+    // The exact phrases halfPhrase would emit for a zero gap. A bare "level on"
+    // would also match the position chip, which IS legitimately level here.
+    expect(home).not.toContain("level on scoring");
+    expect(home).not.toContain("level on time since conceding");
     expect(row).not.toContain("cmp-hot");
   });
 
   it("marks an open clock as a lower bound with a trailing +", () => {
-    const { home } = upcoming(seeded());
-    // SHE have two matches of evidence and no goal times: 180'+, not 180'.
+    const { home } = upcoming(goalless());
+    // Two real goalless draws: 180 minutes of evidence and no goal, so 180'+.
     expect(home).toContain("last scored 180&#x27;+ ago");
     expect(home).toContain("last conceded 180&#x27;+ ago");
     expect(home).toContain("v BOH 180&#x27;+ / 180&#x27;+");
+  });
+
+  it("says so when a club has no timeable match at all", () => {
+    // seeded() is 3-0 and 0-2 with no goal times — the shape an incidents-404
+    // import leaves behind. Neither club has a clock, so the chip must report
+    // missing data rather than invent a 0' one.
+    const { home, away, row } = upcoming(seeded());
+    expect(clock(home)).toEqual({ scored: "—", conceded: "—" });
+    expect(clock(away)).toEqual({ scored: "—", conceded: "—" });
+    expect(home).toContain("no goal times recorded yet (the import had no incident data)");
+    expect(home).not.toContain("0&#x27;");
+    expect(home).not.toContain("last 0 match");
+    expect(row).not.toContain("cmp-hot");
+    expect(row).not.toContain("NaN");
   });
 
   it("leaves a small gap unbolded and says nothing about drastic", () => {

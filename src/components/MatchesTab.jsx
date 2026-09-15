@@ -184,17 +184,29 @@ const halfPhrase = (gap, key) => {
 // attribute is noise. The threshold itself lives only in fixtures.js, which
 // hands over its own match count rather than letting this prose fork from it.
 // `plural()` would say "matchs", hence the inline form — as swapTitle does.
-const drasticClause = (drastic) => {
-  const hits = [drastic.scored && "scoring", drastic.conceded && "clean-sheet"].filter(Boolean);
-  if (!hits.length) return "";
-  const n = drastic.matches;
-  return `; ${hits.length === 2 ? "both gaps" : `${hits[0]} gap`} drastic`
-    + ` (${n} match${n === 1 ? "" : "es"} apart)`;
-};
-
 const matchCount = (n) => `${n} match${n === 1 ? "" : "es"}`;
 
+const drasticClause = (drastic) => {
+  // "conceding", not "clean-sheet" — HALVES explains above why a clean sheet is
+  // a count and this half is not one; the two must not disagree in one file.
+  const hits = [drastic.scored && "scoring", drastic.conceded && "conceding"].filter(Boolean);
+  if (!hits.length) return "";
+  return `; ${hits.length === 2 ? "both gaps" : `${hits[0]} gap`} drastic`
+    + ` (${matchCount(drastic.matches)} apart)`;
+};
+
+// teamGoalClocks drops a match whose goal times do not account for its score —
+// an incidents-404 import has real goals it cannot place in time — so a club can
+// have no clock at all. Name WHOSE data is missing, as the fantasy chip does:
+// the other club may have a real clock on screen beside it.
+const NO_CLOCK = "no goal times recorded yet (the import had no incident data)";
+const noClockTitle = (side, opp, oppName) =>
+  side.clock.known
+    ? `goal clock: not compared — ${oppName} have ${NO_CLOCK}`
+    : NO_CLOCK;
+
 const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
+  if (!side.clock.known || !opp.clock.known) return noClockTitle(side, opp, oppName);
   const mine = `goal clock: last scored ${clockLabel(side.clock.scored)} ago,`
     + ` last conceded ${clockLabel(side.clock.conceded)} ago`;
   const theirs = ` v ${oppName} ${clockLabel(opp.clock.scored)}`
