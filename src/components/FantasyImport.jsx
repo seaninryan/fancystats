@@ -4,6 +4,8 @@ import { buildFantasySnippet, parseFantasyBlob, mapClubs, withTeamIds, shouldCre
 import { matchPlayers } from "../lib/pasteImport.js";
 import { applyFantasyRows, addFantasyOnlyPlayers } from "../lib/store.js";
 import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
+import CopyButton from "./CopyButton.jsx";
+import Flash from "./Flash.jsx";
 
 const SNIPPET = buildFantasySnippet(); // no app state goes into it — build once
 
@@ -17,10 +19,17 @@ export function defaultLinks(unmatched, players) {
   return links;
 }
 
+// Mirrors the Apply button's own wording, so the confirmation reads as the same
+// sentence the button promised.
+export function appliedMessage(players, newCount) {
+  return `Applied ${players} players${newCount ? ` + ${newCount} new` : ""}`;
+}
+
 export default function FantasyImport({ data, update }) {
   const [paste, setPaste] = useState("");
   const [preview, setPreview] = useState(null); // { players, clubs, clubMap, matched, unmatched, links }
   const [error, setError] = useState(null);
+  const [flash, setFlash] = useState(null);
 
   const buildPreview = (players, clubs, overrides) => {
     const clubMap = mapClubs(clubs, data.teams, overrides);
@@ -29,7 +38,7 @@ export default function FantasyImport({ data, update }) {
   };
 
   const parse = () => {
-    setError(null);
+    setError(null); setFlash(null);
     try {
       const { clubs, players } = parseFantasyBlob(paste);
       setPreview(buildPreview(players, clubs, data.meta.fantasyClubMap));
@@ -58,6 +67,8 @@ export default function FantasyImport({ data, update }) {
       const next = applyFantasyRows(d, [...preview.matched, ...linked], now);
       return created.length ? addFantasyOnlyPlayers(next, created, now) : next;
     });
+    // counted before the preview is cleared — it's the only source for these numbers
+    setFlash(appliedMessage(preview.matched.length + linked.length, created.length));
     setPreview(null);
     setPaste("");
   };
@@ -78,14 +89,14 @@ export default function FantasyImport({ data, update }) {
         squad is included.
       </p>
       <div className="row">
-        <button onClick={() => navigator.clipboard?.writeText(SNIPPET)}>Copy snippet</button>
+        <CopyButton text={SNIPPET}>Copy snippet</CopyButton>
         <a className="ext" href="https://fantasyloi.leagueofireland.ie/Stats/PlayerStats"
           target="_blank" rel="noreferrer">Open Player Stats ↗</a>
       </div>
       <textarea readOnly value={SNIPPET} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} />
       <textarea placeholder="Paste the snippet output here" value={paste} rows={4}
         style={{ width: "100%", fontFamily: "monospace" }}
-        onChange={(e) => { setPaste(e.target.value); setPreview(null); }} />
+        onChange={(e) => { setPaste(e.target.value); setPreview(null); setFlash(null); }} />
       <div className="row">
         <button onClick={parse} disabled={!paste.trim()}>Parse</button>
         {preview && (
@@ -95,6 +106,7 @@ export default function FantasyImport({ data, update }) {
           </button>
         )}
       </div>
+      <Flash message={flash} onDone={() => setFlash(null)} />
       {error && <div className="banner err">{error}</div>}
       {preview && (
         <div style={{ marginTop: 8 }}>

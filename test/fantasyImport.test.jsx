@@ -3,7 +3,7 @@ import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { emptyData } from "../src/lib/store.js";
 import UnmatchedLinks, { NEW_PLAYER } from "../src/components/UnmatchedLinks.jsx";
-import FantasyImport, { defaultLinks } from "../src/components/FantasyImport.jsx";
+import FantasyImport, { defaultLinks, appliedMessage } from "../src/components/FantasyImport.jsx";
 
 const dataWithPlayers = () => ({
   ...emptyData(),
@@ -102,5 +102,14 @@ describe("defaultLinks", () => {
       { name: "Max Kovalevskis", teamId: "1", sitePoints: 0 },
       { name: "Daniel Mandroiu", teamId: "1", sitePoints: 0 },
     ], players)).toEqual({ 2: NEW_PLAYER });
+  });
+});
+
+describe("appliedMessage", () => {
+  it("reports the player count", () => {
+    expect(appliedMessage(214, 0)).toBe("Applied 214 players");
+  });
+  it("calls out newly created players separately", () => {
+    expect(appliedMessage(214, 3)).toBe("Applied 214 players + 3 new");
   });
 });
