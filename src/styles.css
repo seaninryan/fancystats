@@ -10,6 +10,8 @@ body { margin: 0; background: var(--bg); color: var(--text);
 button { font: inherit; color: inherit; background: var(--panel);
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.copied { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.copy-failed { background: #fbdcd7; border-color: #f0b4ab; color: #8c1d18; }
 input, select, textarea { font: inherit; color: inherit; background: var(--panel);
   border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
 table { border-collapse: collapse; width: 100%; }
@@ -24,6 +26,11 @@ th { color: var(--dim); font-weight: 600; cursor: pointer; position: sticky; top
 .banner { padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
 .banner.warn { background: #fdf2d0; color: #6e5400; }
 .banner.err { background: #fbdcd7; color: #8c1d18; }
+.banner.ok { background: #dcf0e4; color: #14512f; }
+/* holds legible, then dissolves over the last half-second so the removal reads
+   as a fade rather than a layout jump */
+.banner.flash { animation: flash-out 5s forwards; }
+@keyframes flash-out { 0%, 90% { opacity: 1; } 100% { opacity: 0; } }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .scroll-x { overflow-x: auto; }
 .cell-start { color: var(--accent); }
