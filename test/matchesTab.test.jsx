@@ -428,9 +428,9 @@ describe("MatchesTab goal clocks", () => {
     expect(home).not.toContain("v their");
     // Each half is worded from the chip's own club, and the clause says WHICH
     // halves crossed the threshold plus how far apart the threshold sits.
-    expect(home).toContain("— 400&#x27; more recently, 400&#x27; longer without conceding"
+    expect(home).toContain("— scored 400&#x27; more recently (better), 400&#x27; longer without conceding (better)"
       + "; both gaps drastic (2 matches apart)");
-    expect(away).toContain("— 400&#x27; longer without scoring, 400&#x27; less time since conceding"
+    expect(away).toContain("— scored 400&#x27; less recently (worse), conceded 400&#x27; more recently (worse)"
       + "; both gaps drastic (2 matches apart)");
     expect(home).not.toContain("NaN");
     expect(home).not.toContain("null");
@@ -477,7 +477,7 @@ describe("MatchesTab goal clocks", () => {
       { eventId: 512, round: 2, kickoff: ago(8), home: 1, away: 2, hs: 1, as: 0, hg: [80], ag: [] },
     ]), { round: 3 }));
     expect(clock(home)).toEqual({ scored: "+90", conceded: "+90" });
-    expect(home).toContain("— 90&#x27; more recently, 90&#x27; longer without conceding\"");
+    expect(home).toContain("— scored 90&#x27; more recently (better), 90&#x27; longer without conceding (better)\"");
     expect(row).not.toContain("cmp-hot");
     expect(home).not.toContain("drastic");
   });
@@ -495,6 +495,38 @@ describe("MatchesTab goal clocks", () => {
     // also gone longer without conceding, so the two gaps differ in size.
     expect(clock(home)).toEqual({ scored: "-10", conceded: "-30" });
     expect(clock(away)).toEqual({ scored: "+10", conceded: "+30" });
+  });
+
+  it("untints a split clock that nets under a match, and gives the net", () => {
+    // SHE draw 1-1 with DER late on (scored 5' ago, conceded 2' ago); BOH's
+    // only match is the 1-1 with SHE (scored 50' ago, conceded 80' ago).
+    // Scoring +45 to SHE, conceding -78: net 33' against SHE.
+    const { home, away } = upcoming(fixture(seed([
+      { eventId: 541, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 1, hg: [10], ag: [40] },
+      { eventId: 542, round: 2, kickoff: ago(8), home: 1, away: 3, hs: 1, as: 1, hg: [85], ag: [88] },
+    ], WITH_DERRY), { round: 3 }, WITH_DERRY));
+    expect(clock(home)).toEqual({ scored: "+45", conceded: "-78" });
+    expect(home).toMatch(/<span class="chip" title="goal clock:[^"]*">⚽\+45 🛡-78<\/span>/);
+    expect(away).toMatch(/<span class="chip" title="goal clock:[^"]*">⚽-45 🛡\+78<\/span>/);
+    expect(home).toContain("— scored 45&#x27; more recently (better), conceded 78&#x27; more recently (worse)"
+      + "; net 33&#x27; worse, under 1 match so not tinted\"");
+    expect(away).toContain("; net 33&#x27; better, under 1 match so not tinted\"");
+  });
+
+  it("gives the net on a split clock wide enough to tint", () => {
+    // SHE: last match 1-1 with DER on 90'/85' (scored 0' ago, conceded 5').
+    // BOH: goalless since 5' of round 1, then lost 0-1 to DER on 80' (scored
+    // 175' ago, conceded 10'). Scoring +175, conceding -5: net 170, tinted.
+    const { home, away } = upcoming(fixture(seed([
+      { eventId: 541, round: 1, kickoff: ago(9), home: 1, away: 2, hs: 1, as: 1, hg: [10], ag: [5] },
+      { eventId: 542, round: 2, kickoff: ago(8), home: 1, away: 3, hs: 1, as: 1, hg: [90], ag: [85] },
+      { eventId: 543, round: 2, kickoff: ago(8), home: 2, away: 3, hs: 0, as: 1, hg: [], ag: [80] },
+    ], WITH_DERRY), { round: 3 }, WITH_DERRY));
+    expect(clock(home)).toEqual({ scored: "+175", conceded: "-5" });
+    expect(home).toMatch(/<span class="chip cmp-up[^"]*" title="goal clock:[^"]*">⚽\+175 🛡-5<\/span>/);
+    expect(away).toMatch(/<span class="chip cmp-down[^"]*" title="goal clock:[^"]*">⚽-175 🛡\+5<\/span>/);
+    expect(home).toContain("; net 170&#x27; better");
+    expect(home).not.toContain("not tinted");
   });
 
   it("shows no clock chip on a played fixture", () => {

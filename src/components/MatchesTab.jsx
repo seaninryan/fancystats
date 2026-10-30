@@ -159,25 +159,39 @@ const clockLabel = (c) => `${c.ago}'${c.open ? "+" : ""}`;
 const clockFace = (scored, conceded) => `⚽${deltaLabel(scored)} 🛡${deltaLabel(conceded)}`;
 
 // A suppressed half is an absence of evidence, not a tie. The fpts chip sets the
-// precedent: never word a data gap as "level".
+// precedent: never word a data gap as "level". Each phrase says which way it
+// cuts: "longer without scoring" and "longer without conceding" read alike but
+// mean opposite things, so the halves never share a shape.
 const HALVES = {
   scored: {
     noun: "scoring", none: "neither club has scored inside their window",
-    ahead: "more recently", behind: "longer without scoring",
+    ahead: (m) => `scored ${m} more recently (better)`,
+    behind: (m) => `scored ${m} less recently (worse)`,
   },
   // "clean sheets" would be a count; this half measures minutes since the last
   // goal conceded. And "unbeaten" means undefeated, which a club can be while
   // conceding every week — say only what the clock measures.
   conceded: {
     noun: "time since conceding", none: "neither club has conceded inside their window",
-    ahead: "longer without conceding", behind: "less time since conceding",
+    ahead: (m) => `${m} longer without conceding (better)`,
+    behind: (m) => `conceded ${m} more recently (worse)`,
   },
 };
 const halfPhrase = (gap, key) => {
   const w = HALVES[key];
   if (gap == null) return `${w.noun} not compared: ${w.none}`;
   if (gap === 0) return `level on ${w.noun}`;
-  return `${num(Math.abs(gap))}' ${gap > 0 ? w.ahead : w.behind}`;
+  return (gap > 0 ? w.ahead : w.behind)(`${num(Math.abs(gap))}'`);
+};
+
+// Halves pointing opposite ways leave the reader to do the sum, and the tint
+// rests on it — so give the net. lib decides whether it is too close to tint
+// (split.close); this only says so, never re-deciding it.
+const netClause = (scoredGap, concededGap, split) => {
+  if (scoredGap == null || concededGap == null || Math.sign(scoredGap) * Math.sign(concededGap) >= 0) return "";
+  const net = scoredGap + concededGap;
+  const head = net === 0 ? "; net level" : `; net ${num(Math.abs(net))}' ${net > 0 ? "better" : "worse"}`;
+  return split.close ? `${head}, under ${matchCount(split.matches)} so not tinted` : head;
 };
 
 // Names WHICH halves crossed the threshold — a highlight the reader cannot
@@ -205,7 +219,7 @@ const noClockTitle = (side, opp, oppName) =>
     ? `goal clock: not compared — ${oppName} have ${NO_CLOCK}`
     : NO_CLOCK;
 
-const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
+const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic, split) => {
   if (!side.clock.known || !opp.clock.known) return noClockTitle(side, opp, oppName);
   const mine = `goal clock: last scored ${clockLabel(side.clock.scored)} ago,`
     + ` last conceded ${clockLabel(side.clock.conceded)} ago`;
@@ -224,7 +238,7 @@ const clockTitle = (side, opp, oppName, scoredGap, concededGap, drastic) => {
   const body = scoredGap == null && concededGap == null
     ? "not compared: neither club has scored or conceded inside their windows"
     : `${halfPhrase(scoredGap, "scored")}, ${halfPhrase(concededGap, "conceded")}`;
-  return `${mine}${theirs}${span} — ${body}${drasticClause(drastic)}`;
+  return `${mine}${theirs}${span} — ${body}${netClause(scoredGap, concededGap, split)}${drasticClause(drastic)}`;
 };
 
 // Team pill that navigates to the club on the Teams tab.
@@ -244,7 +258,7 @@ function TeamLink({ team, teamId, openTeam }) {
 // name. Every chip is a signed delta from this side's view, so the two groups
 // mirror; the tint is always lib's `lead`, never the sign on the chip face. The
 // clock gaps arrive home-signed, so the away group is handed them flipped.
-function SideChips({ side, opp, oppName, covered, scoredGap, concededGap, drastic, tag, tagTitle, tagFirst }) {
+function SideChips({ side, opp, oppName, covered, scoredGap, concededGap, drastic, split, tag, tagTitle, tagFirst }) {
   const pos = posDelta(side, opp);
   const form = formDelta(side, opp);
   const fantasy = covered ? side.fantasy - opp.fantasy : null;
@@ -265,7 +279,7 @@ function SideChips({ side, opp, oppName, covered, scoredGap, concededGap, drasti
         fpts {deltaLabel(fantasy)}
       </span>
       <span className={`chip${leadCls(side.lead.goals)}${drastic.any ? " cmp-hot" : ""}`}
-        title={clockTitle(side, opp, oppName, scoredGap, concededGap, drastic)}>
+        title={clockTitle(side, opp, oppName, scoredGap, concededGap, drastic, split)}>
         {clockFace(scoredGap, concededGap)}
       </span>
       {!tagFirst && tagEl}
@@ -344,13 +358,13 @@ export default function MatchesTab({ data, update, openTeam }) {
                 <TeamLink team={data.teams[m.homeTeamId]} teamId={m.homeTeamId} openTeam={openTeam} />
                 {teamPts.has(m.eventId) && <PtsPill pts={teamPts.get(m.eventId).home} />}
                 {cmp && <SideChips side={cmp.home} opp={cmp.away} oppName={awayName} covered={cmp.fantasyCovered}
-                  scoredGap={cmp.scoredGap} concededGap={cmp.concededGap} drastic={cmp.drastic}
+                  scoredGap={cmp.scoredGap} concededGap={cmp.concededGap} drastic={cmp.drastic} split={cmp.split}
                   tag={favHome ? cmp.favoured.tag : null} tagTitle={tagTitle} tagFirst />}
               </span>
               <span className="fx-score">{m.homeScore ?? ""}–{m.awayScore ?? ""}</span>
               <span className="fx-side fx-away">
                 {cmp && <SideChips side={cmp.away} opp={cmp.home} oppName={homeName} covered={cmp.fantasyCovered}
-                  scoredGap={flip(cmp.scoredGap)} concededGap={flip(cmp.concededGap)} drastic={cmp.drastic}
+                  scoredGap={flip(cmp.scoredGap)} concededGap={flip(cmp.concededGap)} drastic={cmp.drastic} split={cmp.split}
                   tag={favAway ? cmp.favoured.tag : null} tagTitle={tagTitle} />}
                 {teamPts.has(m.eventId) && <PtsPill pts={teamPts.get(m.eventId).away} />}
                 <TeamLink team={data.teams[m.awayTeamId]} teamId={m.awayTeamId} openTeam={openTeam} />

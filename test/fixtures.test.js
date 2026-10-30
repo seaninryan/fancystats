@@ -636,6 +636,34 @@ describe("goal clocks in compareFixture", () => {
     expect(cmp.drastic).toEqual({ scored: true, conceded: true, any: true, matches: 2 });
   });
 
+  it("leaves a split clock untinted when the net is under a match", () => {
+    // SHE score and concede on 90' of the latest (0' ago). BOH's last goal is
+    // one match back on m' (180 - m ago); BOH concede on 80' of the latest
+    // (10' ago). Scored +(180 - m), conceded -10: opposite ways, net 170 - m.
+    const at = (m) => compareFixture(fixtureContext(clockRuns(
+      [G([], []), G([], []), G([], []), G([], []), G([90], [90])],
+      [G([], []), G([], []), G([], []), G([m], []), G([], [80])],
+    )), pair());
+    const close = at(81);
+    expect(close.scoredGap).toBe(99);
+    expect(close.concededGap).toBe(-10);
+    expect(close.split).toEqual({ close: true, matches: 1 });
+    expect(close.home.lead.goals).toBe(0);
+    expect(close.away.lead.goals).toBe(0);
+    // The score still counts the net — only the tint is withheld.
+    expect(close.parts.goals).toBeGreaterThan(0);
+    const clear = at(80);
+    expect(clear.split).toEqual({ close: false, matches: 1 });
+    expect(clear.home.lead.goals).toBe(1);
+    expect(clear.away.lead.goals).toBe(-1);
+  });
+
+  it("never calls halves that agree a split, however small the net", () => {
+    const cmp = compareFixture(fixtureContext(levelButSharper()), pair());
+    expect(cmp.split.close).toBe(false); // +70 / 0: nothing to disagree with
+    expect(cmp.home.lead.goals).toBe(1);
+  });
+
   it("adds a goals line to the tag's reasons, from the favoured club's view", () => {
     const cmp = compareFixture(fixtureContext(sharpVsBlunt()), pair());
     expect(cmp.favoured).not.toBe(null);

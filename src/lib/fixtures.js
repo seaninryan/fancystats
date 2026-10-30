@@ -80,6 +80,11 @@ const CAP = FORM_LONG * MATCH_MINUTES;
 // Two matches apart on either half. The ONLY definition of the threshold — the
 // component reads which halves are drastic, never the number.
 const DRASTIC = 2 * MATCH_MINUTES;
+// When the two halves point opposite ways, the combined lead can rest on a few
+// minutes — 111' worse at scoring and 113' better at conceding is a +2' lead —
+// and a full tint on that reads as a verdict the halves do not give. Under one
+// match net, a split clock is untinted. The ONLY definition of this threshold.
+const SPLIT = MATCH_MINUTES;
 
 // Guards the ±1 contract the GRADES table depends on. Neither call site can
 // exceed it today — both clubs in a fixture are rows of the table the spread and
@@ -226,14 +231,25 @@ export function compareFixture(ctx, match) {
     // window does above.
     goals: (part(scoredGap, CAP) + part(concededGap, CAP)) / 2,
   };
+  // A clock whose halves disagree and whose net is under SPLIT: the tint goes
+  // neutral, though the score still counts the net — the tag sees the same
+  // small lead it always did, it just is not painted on the chip. A suppressed
+  // half cannot split. `matches` is the threshold in the tooltip's unit, as
+  // with drastic below.
+  const close = scoredGap != null && concededGap != null
+    && sign(scoredGap) * sign(concededGap) < 0
+    && Math.abs(scoredGap + concededGap) < SPLIT;
+  const split = { close, matches: SPLIT / MATCH_MINUTES };
+
   // Which side leads each metric. Derived from the same parts the score uses, so
-  // a chip's tint can never point the other way from the tag.
+  // a chip's tint can never point the other way from the tag (a close split
+  // clock is neutral, which points nowhere).
   const lead = (dir) => ({
     pos: sign(dir * parts.pos),
     points: sign(dir * parts.ppg),
     form: sign(dir * parts.form),
     fantasy: sign(dir * parts.fpg),
-    goals: sign(dir * parts.goals),
+    goals: close ? 0 : sign(dir * parts.goals),
   });
 
   const score = clamp1(
@@ -286,6 +302,6 @@ export function compareFixture(ctx, match) {
   // than as a genuine tie — lead.fantasy is 0 for both cases.
   return {
     home: { ...home, lead: lead(1) }, away: { ...away, lead: lead(-1) },
-    score, parts, fantasyCovered, scoredGap, concededGap, drastic, favoured,
+    score, parts, fantasyCovered, scoredGap, concededGap, drastic, split, favoured,
   };
 }

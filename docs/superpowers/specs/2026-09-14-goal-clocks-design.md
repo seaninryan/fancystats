@@ -218,6 +218,17 @@ is expected work, not a sign the weights are wrong.
 `lead.goals = sign(dir * parts.goals)`, exactly like every other metric — the
 chip's tint is never re-derived in the component.
 
+**Amended 2026-10-30 — close splits are untinted.** When the halves point
+opposite ways and `|scoredGap + concededGap| < SPLIT` (`SPLIT = 90`, one match),
+`lead.goals = 0`. Live case: `⚽-111 🛡+113` tinted a full green on a +2' net,
+reading as a verdict the halves do not give. The score is unchanged (it still
+counts the net); only the tint is withheld. `compareFixture` exposes
+`split: { close, matches }` so the tooltip can say so without forking the
+threshold. The tooltip now marks each half `(better)`/`(worse)` — "longer
+without scoring" and "longer without conceding" read alike but mean opposite
+things — and a split clock adds `; net N' better|worse`, plus
+`, under 1 match so not tinted` when close.
+
 `drastic` is a **separate boolean**, true when `|scoredGap| >= DRASTIC` or
 `|concededGap| >= DRASTIC`, where `DRASTIC = 180` (two matches). A `null` gap
 never contributes — a suppressed half cannot be drastic. It is deliberately
