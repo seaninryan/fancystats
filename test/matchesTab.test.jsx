@@ -152,20 +152,31 @@ const render = (d) =>
 // is exact; rounds render newest first, so rows[0] is the upcoming fixture.
 const rows = (html) => [...html.matchAll(/<div class="card fixture">([\s\S]*?)<\/div>/g)].map((m) => m[1]);
 
-// The chips of each side, home group first. Chip spans never nest, so this pairs
-// each group with its own closing tag rather than the row's.
-const CHIP_GROUP = /<span class="cmp-chips">((?:<span[^>]*>[^<]*<\/span>)+)<\/span>/g;
+// The chips of each side, home group first. A chip nests at most one level (the
+// goal clock's two half-pills), so this pairs each group with its own closing
+// tag rather than the row's.
+const CHIP_GROUP = /<span class="cmp-chips">((?:<span[^>]*>(?:[^<]|<span[^>]*>[^<]*<\/span>)*<\/span>)+)<\/span>/g;
 const chipGroups = (rowHtml) => [...rowHtml.matchAll(CHIP_GROUP)].map((m) => m[1]);
-const chipCount = (group) => group.match(/<span /g).length;
+const chipCount = (group) => group.match(/<span class="chip/g).length;
 // The visible face of each metric chip: { pos: "+1", pts: "-6", ... }.
 const faces = (group) => Object.fromEntries(
   [...group.matchAll(/>(pos|pts|form|fpts) ([^<]*)</g)].map((m) => [m[1], m[2]]));
 
 // The goal-clock chip's two halves: { scored: "+400", conceded: "+400" }.
 const clock = (group) => {
-  const m = group.match(/>⚽([^ ]+) 🛡([^<]+)</);
+  const m = group.match(/>⚽([^<]+)<\/span> <span class="[^"]*">🛡([^<]+)</);
   return m ? { scored: m[1], conceded: m[2] } : null;
 };
+
+// Each half's own colour: { scored: "up", conceded: "down" }, "" when level.
+const halfTints = (group) => {
+  const m = group.match(/<span class="clock-half ?([^"]*)">⚽[^<]*<\/span> <span class="clock-half ?([^"]*)">🛡/);
+  const t = (c) => c.replace("half-", "");
+  return m ? { scored: t(m[1]), conceded: t(m[2]) } : null;
+};
+
+// The whole clock chip's opening tag, so its own tint can be checked.
+const clockChip = (group) => group.match(/<span class="(chip[^"]*)" title="goal clock:/)?.[1];
 
 const upcoming = (d) => {
   const row = rows(render(d))[0];
@@ -415,8 +426,8 @@ describe("MatchesTab goal clocks", () => {
 
   it("tints the leading side, dims the trailing side, and bolds both", () => {
     const { home, away } = upcoming(sharpVsBlunt());
-    expect(home).toMatch(/<span class="chip cmp-up cmp-hot" title="goal clock:[^"]*">⚽\+400 🛡\+400<\/span>/);
-    expect(away).toMatch(/<span class="chip cmp-down cmp-hot" title="goal clock:[^"]*">⚽-400 🛡-400<\/span>/);
+    expect(clockChip(home)).toBe("chip cmp-up cmp-hot");
+    expect(clockChip(away)).toBe("chip cmp-down cmp-hot");
   });
 
   it("quotes both clubs' raw clocks and names which halves are drastic", () => {
@@ -441,6 +452,7 @@ describe("MatchesTab goal clocks", () => {
     expect(clock(home)).toEqual({ scored: "—", conceded: "—" });
     expect(clock(away)).toEqual({ scored: "—", conceded: "—" });
     expect(home).toContain("not compared: neither club has scored or conceded inside their windows");
+    expect(halfTints(home)).toEqual({ scored: "", conceded: "" });
     // The exact phrases halfPhrase would emit for a zero gap. A bare "level on"
     // would also match the position chip, which IS legitimately level here.
     expect(home).not.toContain("level on scoring");
@@ -506,8 +518,11 @@ describe("MatchesTab goal clocks", () => {
       { eventId: 542, round: 2, kickoff: ago(8), home: 1, away: 3, hs: 1, as: 1, hg: [85], ag: [88] },
     ], WITH_DERRY), { round: 3 }, WITH_DERRY));
     expect(clock(home)).toEqual({ scored: "+45", conceded: "-78" });
-    expect(home).toMatch(/<span class="chip" title="goal clock:[^"]*">⚽\+45 🛡-78<\/span>/);
-    expect(away).toMatch(/<span class="chip" title="goal clock:[^"]*">⚽-45 🛡\+78<\/span>/);
+    expect(clockChip(home)).toBe("chip");
+    expect(clockChip(away)).toBe("chip");
+    // The chip is neutral, but each half still says which way it cuts.
+    expect(halfTints(home)).toEqual({ scored: "up", conceded: "down" });
+    expect(halfTints(away)).toEqual({ scored: "down", conceded: "up" });
     expect(home).toContain("— scored 45&#x27; more recently (better), conceded 78&#x27; more recently (worse)"
       + "; net 33&#x27; worse, under 1 match so not tinted\"");
     expect(away).toContain("; net 33&#x27; better, under 1 match so not tinted\"");
@@ -523,8 +538,10 @@ describe("MatchesTab goal clocks", () => {
       { eventId: 543, round: 2, kickoff: ago(8), home: 2, away: 3, hs: 0, as: 1, hg: [], ag: [80] },
     ], WITH_DERRY), { round: 3 }, WITH_DERRY));
     expect(clock(home)).toEqual({ scored: "+175", conceded: "-5" });
-    expect(home).toMatch(/<span class="chip cmp-up[^"]*" title="goal clock:[^"]*">⚽\+175 🛡-5<\/span>/);
-    expect(away).toMatch(/<span class="chip cmp-down[^"]*" title="goal clock:[^"]*">⚽-175 🛡\+5<\/span>/);
+    expect(clockChip(home)).toBe("chip cmp-up");
+    expect(clockChip(away)).toBe("chip cmp-down");
+    // A tinted chip can still carry a worse half — colour it on its own.
+    expect(halfTints(home)).toEqual({ scored: "up", conceded: "down" });
     expect(home).toContain("; net 170&#x27; better");
     expect(home).not.toContain("not tinted");
   });

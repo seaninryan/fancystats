@@ -194,3 +194,9 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 /* cmp-down fades to .55; a highlight that is simultaneously faded is not a
    highlight, so lift it back to readable. */
 .cmp-chips .chip.cmp-down.cmp-hot { opacity: .8; }
+/* Each goal-clock half carries its own verdict, so a split clock shows its worse
+   half even inside a green chip. Light pills, not coloured text: red text on the
+   accent green would be unreadable. Colours are the ok/err banners'. */
+.cmp-chips .clock-half { border-radius: 4px; padding: 0 3px; }
+.cmp-chips .clock-half.half-up { background: #dcf0e4; color: #14512f; }
+.cmp-chips .clock-half.half-down { background: #fbdcd7; color: #8c1d18; }

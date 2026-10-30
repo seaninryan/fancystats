@@ -155,8 +155,18 @@ const clockLabel = (c) => `${c.ago}'${c.open ? "+" : ""}`;
 
 // The chip face. Both halves point the same way — positive is good for the club
 // the chip sits beside — so a reader never has to remember that one clock reads
-// better high and the other better low.
-const clockFace = (scored, conceded) => `⚽${deltaLabel(scored)} 🛡${deltaLabel(conceded)}`;
+// better high and the other better low. Each half is also coloured on its own:
+// the chip's tint is the net, and a split clock (⚽-5 🛡+119) needs the worse
+// half visible inside a green chip. This is the face value's own sign under that
+// positive-is-good contract, not a second opinion on who leads.
+const halfCls = (g) => (g > 0 ? "clock-half half-up" : g < 0 ? "clock-half half-down" : "clock-half");
+const clockFace = (scored, conceded) => (
+  <>
+    <span className={halfCls(scored)}>⚽{deltaLabel(scored)}</span>
+    {" "}
+    <span className={halfCls(conceded)}>🛡{deltaLabel(conceded)}</span>
+  </>
+);
 
 // A suppressed half is an absence of evidence, not a tie. The fpts chip sets the
 // precedent: never word a data gap as "level". Each phrase says which way it

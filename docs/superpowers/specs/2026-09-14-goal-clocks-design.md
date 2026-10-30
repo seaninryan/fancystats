@@ -228,6 +228,9 @@ threshold. The tooltip now marks each half `(better)`/`(worse)` — "longer
 without scoring" and "longer without conceding" read alike but mean opposite
 things — and a split clock adds `; net N' better|worse`, plus
 `, under 1 match so not tinted` when close.
+Each half is also its own small pill on the chip face — light green when
+positive (better for this club), light red when negative, plain when level or
+suppressed — so the worse half of a split stays visible inside a tinted chip.
 
 `drastic` is a **separate boolean**, true when `|scoredGap| >= DRASTIC` or
 `|concededGap| >= DRASTIC`, where `DRASTIC = 180` (two matches). A `null` gap
