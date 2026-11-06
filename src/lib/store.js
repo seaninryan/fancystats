@@ -779,3 +779,24 @@ export function removeFantasyOnlyPlayer(data, playerId) {
   }
   return next;
 }
+
+// Per-season fantasy-site fields: archived at rollover, reset on the live player.
+export const ARCHIVED_FIELDS = ["price", "sitePoints", "gamePosition", "gamePositionSource", "inSquad"];
+
+export function startNewSeason(data, { seasonId, label }) {
+  const id = Number(seasonId);
+  const old = data.meta.seasonId;
+  if (!id || id === old || data.seasons?.[id]) throw new Error(`season ${seasonId} already exists`);
+  const next = migrateSeasons(data);
+  const archive = {};
+  for (const [pid, p] of Object.entries(next.players)) {
+    const rec = Object.fromEntries(ARCHIVED_FIELDS.map((f) => [f, p[f] ?? (f === "inSquad" ? false : null)]));
+    if (ARCHIVED_FIELDS.some((f) => rec[f] != null && rec[f] !== false)) archive[pid] = rec;
+    p.price = null; p.priceUpdatedAt = null; p.sitePoints = null;
+    p.gamePosition = null; p.gamePositionSource = null; p.inSquad = false;
+  }
+  next.seasons[old] = { ...next.seasons[old], players: archive };
+  next.seasons[id] = { label: String(label || id) };
+  next.meta = { ...next.meta, seasonId: id, lastEventSync: null };
+  return next;
+}

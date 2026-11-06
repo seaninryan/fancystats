@@ -1309,3 +1309,49 @@ describe("migrateSeasons", () => {
     expect(u.matches["100"].seasonId).toBeUndefined();
   });
 });
+
+describe("startNewSeason", () => {
+  const ready = () => {
+    let d = migrateSeasons(importedFixture());
+    d = setPlayerField(d, 10, "gamePosition", "FWD");
+    d = setPlayerField(d, 10, "price", 7.5);
+    d = setPlayerField(d, 10, "sitePoints", 120);
+    d = setPlayerField(d, 10, "inSquad", true);
+    d = setPlayerField(d, 10, "starred", true);
+    d = setPlayerField(d, 10, "customName", "Keena");
+    return d;
+  };
+  it("archives fantasy fields under the old season", () => {
+    const d = startNewSeason(ready(), { seasonId: 99999, label: "2027" });
+    expect(d.seasons["87682"].players["10"]).toEqual({
+      price: 7.5, sitePoints: 120, gamePosition: "FWD", gamePositionSource: "manual", inSquad: true,
+    });
+  });
+  it("skips players with nothing to archive", () => {
+    const d = startNewSeason(ready(), { seasonId: 99999, label: "2027" });
+    expect(d.seasons["87682"].players["11"]).toBeUndefined();
+  });
+  it("resets live fantasy fields but keeps user identity fields", () => {
+    const p = startNewSeason(ready(), { seasonId: 99999, label: "2027" }).players["10"];
+    expect(p).toMatchObject({ price: null, priceUpdatedAt: null, sitePoints: null, gamePosition: null, gamePositionSource: null, inSquad: false });
+    expect(p).toMatchObject({ starred: true, customName: "Keena", name: "A Keena" });
+  });
+  it("switches meta to the new season and registers it", () => {
+    const d = startNewSeason(ready(), { seasonId: 99999, label: "2027" });
+    expect(d.meta.seasonId).toBe(99999);
+    expect(d.meta.lastEventSync).toBeNull();
+    expect(d.seasons["99999"]).toEqual({ label: "2027" });
+  });
+  it("deletes nothing", () => {
+    const before = ready();
+    const d = startNewSeason(before, { seasonId: 99999, label: "2027" });
+    expect(Object.keys(d.matches)).toEqual(Object.keys(before.matches));
+    expect(Object.keys(d.appearances)).toEqual(Object.keys(before.appearances));
+    expect(d.matches["100"].seasonId).toBe(87682);
+  });
+  it("rejects the current or an existing season id", () => {
+    expect(() => startNewSeason(ready(), { seasonId: 87682, label: "x" })).toThrow();
+    const d = startNewSeason(ready(), { seasonId: 99999, label: "2027" });
+    expect(() => startNewSeason(d, { seasonId: 87682, label: "x" })).toThrow();
+  });
+});
