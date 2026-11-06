@@ -3,6 +3,7 @@ import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, m
 import { teamColor } from "../lib/teamColors.js";
 import { scoreAppearance } from "../lib/scoring.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
+import { previousSeasonTotals } from "../lib/seasons.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 
@@ -29,9 +30,10 @@ function AdjustForm({ adj, onSave, onCancel }) {
   );
 }
 
-export default function PlayerDetail({ data, update, playerId, onBack }) {
+export default function PlayerDetail({ data, fullData, readOnly, update, playerId, onBack }) {
   const [adjustKey, setAdjustKey] = useState(null);
   const p = data.players[playerId];
+  const last = !readOnly && fullData ? previousSeasonTotals(fullData, playerId) : null;
   if (!p) return <div className="card dim">Player not found. <button onClick={onBack}>←</button></div>;
   const apps = playerAppearances(data, playerId);
   const derived = deriveRealPosition(apps);
@@ -61,6 +63,12 @@ export default function PlayerDetail({ data, update, playerId, onBack }) {
           <TeamPill team={data.teams[p.teamId]} label={data.teams[p.teamId]?.name} />
         </h3>
       </div>
+      {last && (
+        <p className="dim" style={{ margin: "4px 0" }} title={`${last.label} season, scored at that season's fantasy position`}>
+          {last.label}: {last.apps} apps · {last.minutes.toLocaleString("en-IE")}′ · {last.goals}G {last.assists}A
+          {last.points != null && ` · ${last.points} pts (${(last.points / last.apps).toFixed(1)}/g)`}
+        </p>
+      )}
       <div className="card row">
         <button className={p.starred ? "primary" : ""} onClick={() => setField("starred", !p.starred)}>⭐ watch</button>
         <button className={p.inSquad ? "primary" : ""} onClick={() => setField("inSquad", !p.inSquad)}>🔵 in squad</button>

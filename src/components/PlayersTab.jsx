@@ -4,6 +4,7 @@ import { teamColor } from "../lib/teamColors.js";
 import { PosPill } from "./Pills.jsx";
 import { playerWeeklySeries, roundsForEvents, PLAYER_STATS } from "../lib/series.js";
 import GameweekChart from "./GameweekChart.jsx";
+import { previousSeasonId, seasonView } from "../lib/seasons.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 const COLS = [
@@ -28,7 +29,7 @@ function MismatchMark({ mi }) {
   );
 }
 
-export default function PlayersTab({ data, update, openPlayer }) {
+export default function PlayersTab({ data, fullData, readOnly, update, openPlayer }) {
   const [filters, setFilters] = useState({ team: "all", pos: "all", starred: false, inSquad: false, mismatch: false, hot: false, q: "" });
   const [win, setWin] = useState("all"); // "all" | 3 | 5
   const [sort, setSort] = useState({ key: "points", dir: -1 });
@@ -42,6 +43,17 @@ export default function PlayersTab({ data, update, openPlayer }) {
     next.has(id) ? next.delete(id) : next.add(id);
     return next;
   });
+
+  // previous season's points per player, for the "Last" column (current-season view only)
+  const lastPts = useMemo(() => {
+    const prev = !readOnly && fullData ? previousSeasonId(fullData) : null;
+    if (prev == null) return null;
+    const pv = seasonView(fullData, prev);
+    const index = appearancesByPlayer(pv);
+    const out = new Map();
+    for (const [pid, apps] of index) out.set(String(pid), playerTotals(pv, pid, { apps }).points);
+    return out;
+  }, [fullData, readOnly]);
 
   const rows = useMemo(() => {
     const index = appearancesByPlayer(data); // one pass instead of N full scans
@@ -67,10 +79,11 @@ export default function PlayersTab({ data, update, openPlayer }) {
         seasonPts,
         // cross-check is season-vs-site even when a window narrows the Pts column
         siteDelta: p.sitePoints != null && seasonPts != null ? seasonPts - p.sitePoints : null,
+        last: lastPts?.get(String(id)) ?? null,
         ...t,
       };
     });
-  }, [data, win]);
+  }, [data, win, lastPts]);
 
   // The Last 3/Last 5 filter narrows the graph too: each player keeps their own
   // team's window (teams play at different rounds), and the shared x-axis spans
@@ -116,7 +129,10 @@ export default function PlayersTab({ data, update, openPlayer }) {
   const overCap = capNum != null && basket.cost > capNum;
 
   // ± only means something relative to a window
-  const cols = win === "all" ? COLS : [...COLS.slice(0, 5), ["climb", "±", "form vs baseline: points per team match in the window minus before it"], ...COLS.slice(5)];
+  const LAST_COL = ["last", "Last", "fantasy points last season (at last season's position)"];
+  const base = lastPts ? [...COLS.slice(0, 5), LAST_COL, ...COLS.slice(5)] : COLS;
+  // ± only means something relative to a window
+  const cols = win === "all" ? base : [...base.slice(0, 5), ["climb", "±", "form vs baseline: points per team match in the window minus before it"], ...base.slice(5)];
 
   const shown = rows
     .filter((r) =>
@@ -214,6 +230,7 @@ export default function PlayersTab({ data, update, openPlayer }) {
                 {win !== "all" && (
                   <td>{r.climb == null ? "—" : <span className={r.climb >= 0 ? "gain" : "loss"}>{(r.climb >= 0 ? "+" : "") + r.climb.toFixed(1)}</span>}</td>
                 )}
+                {lastPts && <td className="dim">{r.last ?? "—"}</td>}
                 <td>{r.value == null ? "—" : r.value.toFixed(1)}</td>
                 <td>{r.goals}</td><td>{r.assists}</td><td>{r.pens}</td><td>{r.minutes}</td><td>{r.starts}</td><td>{r.subApps}</td>
               </tr>
