@@ -794,7 +794,7 @@ export const ARCHIVED_FIELDS = ["price", "sitePoints", "gamePosition", "gamePosi
 export function startNewSeason(data, { seasonId, label }) {
   const id = Number(seasonId);
   const old = data.meta.seasonId;
-  if (!Number.isFinite(id) || id <= 0) throw new Error(`invalid season id: ${seasonId}`);
+  if (!Number.isInteger(id) || id <= 0) throw new Error(`invalid season id: ${seasonId}`);
   if (id === old || data.seasons?.[id]) throw new Error(`season ${seasonId} already exists`);
   const next = migrateSeasons(data);
   const archive = {};

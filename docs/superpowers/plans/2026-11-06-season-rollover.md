@@ -759,6 +759,7 @@ function NewSeasonCard({ data, update }) {
         Find a new season id via api.sofascore.com/api/v1/unique-tournament/{data.meta.tournamentId}/seasons (open in a browser tab).
       </p>
       <div className="row">
+        {/* NewSeasonCard receives the FULL save (fullData ?? data), so the backup covers every season */}
         <button onClick={() => downloadBackup(data)}>⬇ Download backup</button>
         {!open && <button onClick={() => setOpen(true)}>Start new season…</button>}
       </div>

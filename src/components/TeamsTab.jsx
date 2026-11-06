@@ -184,6 +184,7 @@ export default function TeamsTab({ data, update, openPlayer, focusTeam }) {
       <p className="dim">● start · ◐ off · ○ on · ⚽ goal · 🥅 pen · 👟 assist · number = fantasy pts</p>
       {absEdit && (() => {
         const m = data.matches[absEdit.eventId];
+        if (!m) return null;
         const home = String(m.homeTeamId) === selected;
         const opp = data.teams[home ? m.awayTeamId : m.homeTeamId]?.shortName;
         const ctx = `${playerName(data.players[absEdit.pid])} · R${matchRound(m)} ${home ? "v" : "@"} ${opp}`;

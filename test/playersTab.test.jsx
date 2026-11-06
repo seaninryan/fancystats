@@ -1,7 +1,7 @@
 // test/playersTab.test.jsx
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { emptyData, addFantasyOnlyPlayers, applyImport, setPlayerField, migrateSeasons, startNewSeason } from "../src/lib/store.js";
+import { emptyData, playerTotals, addFantasyOnlyPlayers, applyImport, setPlayerField, migrateSeasons, startNewSeason } from "../src/lib/store.js";
 import { seasonView } from "../src/lib/seasons.js";
 import PlayersTab from "../src/components/PlayersTab.jsx";
 import PlayerDetail from "../src/components/PlayerDetail.jsx";
@@ -70,6 +70,10 @@ describe("last season", () => {
     expect(html).toContain("2026:");
     expect(html).toContain("1 apps");
     expect(html).toContain("2G 0A");
+    // scored at last season's position (FWD), not the reset live one
+    const pts = playerTotals(seasonView(d, 87682), 10).points;
+    expect(pts).toBeGreaterThan(0);
+    expect(html).toContain(`${pts} pts`);
   });
   it("PlayerDetail hides the line when viewing a past season", () => {
     const d = rolled();
@@ -82,6 +86,8 @@ describe("last season", () => {
     const html = renderToStaticMarkup(
       <PlayersTab data={seasonView(d, 99999)} fullData={d} update={() => {}} openPlayer={() => {}} />);
     expect(html).toContain(">Last<");
+    const pts = playerTotals(seasonView(d, 87682), 10).points;
+    expect(html).toContain(`<td class="dim">${pts}</td>`);
   });
   it("PlayersTab has no Last column with a single season or when read-only", () => {
     expect(renderToStaticMarkup(<PlayersTab data={emptyData()} update={() => {}} openPlayer={() => {}} />)).not.toContain(">Last<");

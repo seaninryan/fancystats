@@ -128,7 +128,6 @@ export default function PlayersTab({ data, fullData, readOnly, update, openPlaye
   const capNum = parseFloat(cap) || null;
   const overCap = capNum != null && basket.cost > capNum;
 
-  // ± only means something relative to a window
   const LAST_COL = ["last", "Last", "fantasy points last season (at last season's position)"];
   const base = lastPts ? [...COLS.slice(0, 5), LAST_COL, ...COLS.slice(5)] : COLS;
   // ± only means something relative to a window

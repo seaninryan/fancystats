@@ -32,11 +32,14 @@ function downloadBackup(data) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
   const a = document.createElement("a");
   a.href = url; a.download = backupFileName(new Date());
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 40000);
 }
 
 function NewSeasonCard({ data, update }) {
+  // data here is the full save (not a season view), so the backup covers every season
   const [open, setOpen] = useState(false);
   const [id, setId] = useState("");
   const [label, setLabel] = useState("");
@@ -44,7 +47,8 @@ function NewSeasonCard({ data, update }) {
   const cur = seasonList(data).find((s) => s.current);
   const start = () => {
     const n = Number(id);
-    if (!n || n === Number(data.meta.seasonId) || data.seasons?.[n]) { setErr(`Season ${id} already exists`); return; }
+    if (!Number.isInteger(n) || n <= 0) { setErr(`Invalid season id: ${id}`); return; }
+    if (n === Number(data.meta.seasonId) || data.seasons?.[n]) { setErr(`Season ${id} already exists`); return; }
     update((d) => startNewSeason(d, { seasonId: n, label: label.trim() || id }));
     setOpen(false); setId(""); setLabel(""); setErr(null);
   };
@@ -71,7 +75,7 @@ function NewSeasonCard({ data, update }) {
             team colours and club mappings carry over. Nothing is deleted — download a backup first anyway.
           </p>
           <div className="row">
-            <button className="primary" disabled={!Number(id)} onClick={start}>Start new season</button>
+            <button className="primary" disabled={!(Number.isInteger(Number(id)) && Number(id) > 0)} onClick={start}>Start new season</button>
             <button onClick={() => { setOpen(false); setErr(null); }}>Cancel</button>
           </div>
           {err && <p className="err">{err}</p>}
@@ -81,7 +85,7 @@ function NewSeasonCard({ data, update }) {
   );
 }
 
-export default function SettingsTab({ data, update }) {
+export default function SettingsTab({ data, fullData, update }) {
   const [kind, setKind] = useState("price");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState(null); // { matched, unmatched, links: {idx: playerId} }
@@ -152,7 +156,7 @@ export default function SettingsTab({ data, update }) {
           </div>
         )}
       </details>
-      <NewSeasonCard data={data} update={update} />
+      <NewSeasonCard data={fullData ?? data} update={update} />
       <div className="card row">
         <button onClick={() => window.location.reload()}>⟳ Resync from Drive</button>
         <button onClick={signOut}>Sign out</button>

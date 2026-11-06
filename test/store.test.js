@@ -1416,5 +1416,7 @@ describe("season id preservation", () => {
     const d = migrateSeasons(emptyData());
     expect(() => startNewSeason(d, { seasonId: NaN, label: "x" })).toThrow(/invalid season id/);
     expect(() => startNewSeason(d, { seasonId: "", label: "x" })).toThrow(/invalid season id/);
+    expect(() => startNewSeason(d, { seasonId: 2027.5, label: "x" })).toThrow(/invalid season id/);
+    expect(() => startNewSeason(d, { seasonId: -5, label: "x" })).toThrow(/invalid season id/);
   });
 });
