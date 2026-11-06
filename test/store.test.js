@@ -13,6 +13,7 @@ import {
   playerClimb,
   teamSitePoints,
   applyFantasyRows,
+  migrateSeasons, startNewSeason,
   fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly, removeFantasyOnlyPlayer,
 } from "../src/lib/store.js";
 
@@ -1248,5 +1249,63 @@ describe("teamGoalClocks", () => {
     ]));
     expect(c.has(1)).toBe(true);
     expect(c.has("1")).toBe(false);
+  });
+});
+
+describe("season tagging", () => {
+  it("emptyData has an empty seasons map", () => {
+    expect(emptyData().seasons).toEqual({});
+  });
+  it("applyImport stamps new matches with the current meta.seasonId", () => {
+    expect(importedFixture().matches["100"].seasonId).toBe(87682);
+  });
+  it("re-import never moves a match to another season", () => {
+    let d = importedFixture();
+    d = { ...d, meta: { ...d.meta, seasonId: 99999 } };
+    const re = applyImport(d, { match: { ...d.matches["100"], seasonId: undefined }, teams: [], players: [], appearances: [] }, NOW + 1);
+    expect(re.matches["100"].seasonId).toBe(87682);
+  });
+  it("upsertMatchStubs stamps new stubs and keeps existing tags", () => {
+    let d = importedFixture();
+    d = { ...d, meta: { ...d.meta, seasonId: 99999 } };
+    d = upsertMatchStubs(d, [
+      { eventId: 100, round: 1, kickoff: 1, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 1, awayScore: 0 },
+      { eventId: 300, round: 1, kickoff: 2, status: "notstarted", homeTeamId: 1, awayTeamId: 2, homeScore: null, awayScore: null },
+    ], []);
+    expect(d.matches["100"].seasonId).toBe(87682);
+    expect(d.matches["300"].seasonId).toBe(99999);
+  });
+});
+
+describe("migrateSeasons", () => {
+  const untagged = () => {
+    const d = importedFixture();
+    delete d.matches["100"].seasonId;
+    delete d.seasons;
+    return d;
+  };
+  it("stamps untagged matches with meta.seasonId and seeds the 2026 label", () => {
+    const d = migrateSeasons(untagged());
+    expect(d.matches["100"].seasonId).toBe(87682);
+    expect(d.seasons).toEqual({ 87682: { label: "2026" } });
+  });
+  it("labels an unknown current season by its id", () => {
+    const u = untagged();
+    u.meta.seasonId = 12345;
+    expect(migrateSeasons(u).seasons).toEqual({ 12345: { label: "12345" } });
+  });
+  it("leaves tagged matches and existing season entries alone, and is idempotent", () => {
+    let d = importedFixture();
+    d.matches["100"].seasonId = 11111;
+    d.seasons = { 87682: { label: "My 2026", players: { 10: { price: 5 } } } };
+    const once = migrateSeasons(d);
+    expect(once.matches["100"].seasonId).toBe(11111);
+    expect(once.seasons["87682"].label).toBe("My 2026");
+    expect(migrateSeasons(once)).toEqual(once);
+  });
+  it("does not mutate its input", () => {
+    const u = untagged();
+    migrateSeasons(u);
+    expect(u.matches["100"].seasonId).toBeUndefined();
   });
 });

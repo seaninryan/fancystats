@@ -9,7 +9,7 @@ export function emptyData() {
   return {
     version: 1,
     meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null, sofascoreToken: null, fantasyClubMap: {} },
-    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {},
+    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {}, seasons: {},
   };
 }
 
@@ -33,7 +33,8 @@ export function applyImport(data, normalized, now) {
     if (k.startsWith(match.eventId + ":")) delete next.appearances[k];
   }
   const prevMatch = next.matches[match.eventId];
-  next.matches[match.eventId] = { ...match, importedAt: now };
+  // a match's season is fixed at first sight; re-imports never move it
+  next.matches[match.eventId] = { ...match, importedAt: now, seasonId: prevMatch?.seasonId ?? next.meta.seasonId };
   // user-owned match field survives re-import, like player edits do
   if (prevMatch?.roundOverride != null) next.matches[match.eventId].roundOverride = prevMatch.roundOverride;
   for (const a of appearances) next.appearances[`${a.eventId}:${a.playerId}`] = { ...a };
@@ -51,8 +52,20 @@ export function upsertMatchStubs(data, stubs, teams) {
   for (const t of teams) next.teams[t.id] = { ...next.teams[t.id], name: t.name, shortName: t.shortName };
   for (const s of stubs) {
     const prev = next.matches[s.eventId] || {};
-    next.matches[s.eventId] = { ...prev, ...s }; // preserves importedAt/goalTimes/partial when present
+    next.matches[s.eventId] = { ...prev, ...s, seasonId: prev.seasonId ?? next.meta.seasonId }; // preserves importedAt/goalTimes/partial when present
   }
+  return next;
+}
+
+// Load-time migration. Before season tagging existed every match belonged to the
+// current season, so untagged matches get meta.seasonId. Idempotent.
+const KNOWN_SEASON_LABELS = { 87682: "2026" };
+export function migrateSeasons(data) {
+  const next = structuredClone(data);
+  next.seasons ??= {};
+  const cur = next.meta.seasonId;
+  for (const m of Object.values(next.matches)) if (m.seasonId == null) m.seasonId = cur;
+  next.seasons[cur] ??= { label: KNOWN_SEASON_LABELS[cur] ?? String(cur) };
   return next;
 }
 
