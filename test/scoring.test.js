@@ -52,17 +52,21 @@ describe("clean sheets (GK/DEF only)", () => {
   it("MID never gets clean sheet points", () => {
     expect(pts(base, match, "MID", "cleanSheet")).toBeUndefined();
   });
-  it("DEF subbed off before concession keeps partial CS: +2", () => {
-    const m = { ...match, homeScore: 2, awayScore: 1, goalTimes: { home: [30, 75], away: [80] } };
-    expect(pts({ ...base, subOffMin: 71, minutes: 71 }, m, "DEF", "cleanSheet")).toBe(2);
+  // Site rule (verified vs 2026 per-gameweek data): the TEAM must concede nothing all match;
+  // the player's tier only sets the amount (full 4 / started 2 / sub 1).
+  it("DEF subbed off, team keeps a clean sheet: +2", () => {
+    expect(pts({ ...base, subOffMin: 71, minutes: 71 }, match, "DEF", "cleanSheet")).toBe(2);
   });
-  it("goal at exactly subOffMin counts as conceded", () => {
-    const m = { ...match, awayScore: 1, goalTimes: { home: [30, 75], away: [71] } };
+  it("DEF subbed off before the team concedes gets no CS", () => {
+    const m = { ...match, homeScore: 2, awayScore: 1, goalTimes: { home: [30, 75], away: [80] } };
     expect(pts({ ...base, subOffMin: 71, minutes: 71 }, m, "DEF", "cleanSheet")).toBeUndefined();
   });
-  it("sub DEF coming on after all concessions: +1", () => {
+  it("sub DEF, team keeps a clean sheet: +1", () => {
+    expect(pts({ ...base, started: false, subOnMin: 46, minutes: 44 }, match, "DEF", "cleanSheet")).toBe(1);
+  });
+  it("sub DEF coming on after the team conceded gets no CS", () => {
     const m = { ...match, awayScore: 1, goalTimes: { home: [], away: [20] } };
-    expect(pts({ ...base, started: false, subOnMin: 46, minutes: 44 }, m, "DEF", "cleanSheet")).toBe(1);
+    expect(pts({ ...base, started: false, subOnMin: 46, minutes: 44 }, m, "DEF", "cleanSheet")).toBeUndefined();
   });
 });
 
@@ -98,19 +102,29 @@ describe("concededWhileOn", () => {
   });
 });
 
-describe("red-carded starter (current behavior — re-verify vs real gameweek in Task 13)", () => {
-  // A red card is not a substitution, so subOffMin stays null: the player is
-  // treated as on-pitch to FT for clean-sheet purposes and keeps fullMatch tier.
+describe("sent-off starter (site scores it as Started, not Full Game)", () => {
+  it("straight red: started tier (2), not full match", () => {
+    const s = scoreAppearance({ ...base, red: true }, match, "MID");
+    expect(s.breakdown.find(([r]) => r === "startedSubbedOff")[1]).toBe(2);
+    expect(s.breakdown.find(([r]) => r === "fullMatch")).toBeUndefined();
+  });
+  it("second yellow: started tier, net −3 cards", () => {
+    const s = scoreAppearance({ ...base, yellow: 1, secondYellow: true }, match, "MID");
+    expect(s.total).toBe(2 + 2 - 1 - 2); // started + win + yellow + second yellow
+  });
+  it("red via adjustment also drops to started tier", () => {
+    const s = scoreAppearance(base, match, "MID", { red: true });
+    expect(s.breakdown.find(([r]) => r === "startedSubbedOff")[1]).toBe(2);
+  });
   it("loses the clean sheet if the opposition scores after the dismissal", () => {
     const m = { ...match, homeScore: 2, awayScore: 1, goalTimes: { home: [30, 75], away: [80] } };
     const s = scoreAppearance({ ...base, red: true }, m, "DEF");
     expect(s.breakdown.find(([r]) => r === "cleanSheet")).toBeUndefined();
-    expect(s.breakdown.find(([r]) => r === "fullMatch")[1]).toBe(3);
   });
-  it("keeps the clean sheet if the opposition never scores", () => {
+  it("team clean sheet pays the started amount", () => {
     const s = scoreAppearance({ ...base, red: true }, match, "DEF");
-    expect(s.breakdown.find(([r]) => r === "cleanSheet")[1]).toBe(4);
-    expect(s.total).toBe(3 + 2 + 4 - 4); // fullMatch + win + CS + straight red
+    expect(s.breakdown.find(([r]) => r === "cleanSheet")[1]).toBe(2);
+    expect(s.total).toBe(2 + 2 + 2 - 4); // started + win + CS + straight red
   });
 });
 

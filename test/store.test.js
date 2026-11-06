@@ -139,7 +139,7 @@ describe("review fixes", () => {
     let d = importedFixture();
     d.appearances["100:10"].red = true;
     d = setPlayerField(d, 10, "gamePosition", "FWD");
-    expect(playerTotals(d, 10).points).toBe(5); // 3 fullMatch + 2 win + 4 goal − 4 red
+    expect(playerTotals(d, 10).points).toBe(4); // 2 started (sent off) + 2 win + 4 goal − 4 red
     d = setAdjustment(d, "100:10", { red: false, note: "card rescinded" });
     expect(d.adjustments["100:10"]).toBeDefined();
     expect(playerTotals(d, 10).points).toBe(9);

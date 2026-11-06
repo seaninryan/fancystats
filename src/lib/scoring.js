@@ -42,7 +42,9 @@ export function scoreAppearance(app0, match, position, adjustment = null) {
   const app = adjustment ? applyAdjustment(app0, adjustment) : app0;
   const br = [];
 
-  const tier = !app.started ? "sub" : app.subOffMin != null ? "startedSubbedOff" : "fullMatch";
+  // A sent-off starter (red or second yellow) didn't finish the game: the site scores "Started".
+  const sentOff = app.red || app.secondYellow;
+  const tier = !app.started ? "sub" : app.subOffMin != null || sentOff ? "startedSubbedOff" : "fullMatch";
   br.push([tier, RULES.appearance[tier]]);
 
   const ours = app.teamId === match.homeTeamId ? match.homeScore : match.awayScore;
@@ -53,7 +55,8 @@ export function scoreAppearance(app0, match, position, adjustment = null) {
   if (app.goals) br.push(["goals", app.goals * RULES.goal[position]]);
   if (app.assists) br.push(["assists", app.assists * RULES.assist]);
 
-  if (RULES.cleanSheet.positions.includes(position) && concededWhileOn(app, match) === 0) {
+  // Clean sheet = the TEAM conceded nothing all match (site rule); the tier only sets the amount.
+  if (RULES.cleanSheet.positions.includes(position) && theirs === 0) {
     br.push(["cleanSheet", RULES.cleanSheet[CLEAN_SHEET_BY_TIER[tier]]]);
   }
 
