@@ -73,9 +73,10 @@ Also `seasonList(data)` → `[{ seasonId, label, current }]` newest first, and
 - **Season picker** in the header, shown only when `seasonList` has >1 entry.
 - **PlayerDetail**: a line under the header, when `previousSeasonId` exists and the player has
   appearances there: `<label>: N apps · M′ · xG yA · P pts (P/apps per game)` via
-  `playerTotals(seasonView(data, prev), id)`. Hidden in past-season view.
-- **PlayersTab**: optional "Last season" points column, toggled like the existing optional columns,
-  only offered when `previousSeasonId` exists.
+  `playerTotals(seasonView(fullData, prev), id)`. PlayerDetail and PlayersTab therefore also receive
+  the raw save as a `fullData` prop (they otherwise get `view` as `data`). Hidden in past-season view.
+- **PlayersTab**: a sortable "Last" column (previous-season fantasy points, blank for players with
+  no appearances then), shown only when `previousSeasonId` exists and not in past-season view.
 - **SettingsTab** "Season" card: replace the raw season-id input (which would mis-tag matches) with
   "Start new season…": inputs for season id + label, a confirm step listing what's archived/reset,
   then `update((d) => startNewSeason(d, …))`. Plus **Download backup** — saves the whole data
