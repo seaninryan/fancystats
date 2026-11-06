@@ -42,6 +42,7 @@ export function previousSeasonId(data) {
 
 // { seasonId, label, apps, minutes, goals, assists, points } for the player's
 // previous season, or null when there is none or they didn't play in it.
+// `points` is itself null when the player had no fantasy position that season.
 export function previousSeasonTotals(data, playerId) {
   const prev = previousSeasonId(data);
   if (prev == null) return null;

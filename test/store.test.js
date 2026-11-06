@@ -16,6 +16,7 @@ import {
   migrateSeasons, startNewSeason,
   fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly, removeFantasyOnlyPlayer,
 } from "../src/lib/store.js";
+import { seasonView } from "../src/lib/seasons.js";
 
 const NOW = 1765000000000;
 
@@ -1353,5 +1354,67 @@ describe("startNewSeason", () => {
     expect(() => startNewSeason(ready(), { seasonId: 87682, label: "x" })).toThrow();
     const d = startNewSeason(ready(), { seasonId: 99999, label: "2027" });
     expect(() => startNewSeason(d, { seasonId: 87682, label: "x" })).toThrow();
+  });
+});
+
+describe("ghost archive across rollover", () => {
+  const GID = "fx-danny-mandroiu-1";
+  const rolled = () => {
+    let d = migrateSeasons(withGhost());
+    const old = d.meta.seasonId;
+    d = startNewSeason(d, { seasonId: 99999, label: "2027" });
+    return { d, old };
+  };
+  const debut = (d) => applyImport(d, {
+    match: { eventId: 200, round: 1, kickoff: 1764900000000, status: "finished", homeTeamId: 1, awayTeamId: 2, homeScore: 0, awayScore: 0, goalTimes: { home: [], away: [] }, partial: false },
+    teams: [], players: [{ id: 55, name: "Danny Mandroiu", teamId: 1 }],
+    appearances: [{ eventId: 200, playerId: 55, teamId: 1, started: true, subOnMin: null, subOffMin: null, minutes: 90, positionPlayed: "M", goals: 0, assists: 0, ownGoals: 0, yellow: 0, secondYellow: false, red: false, penMissed: 0, penSaved: 0 }],
+  }, NOW);
+
+  it("mergeGhost moves the ghost's archived season data to the real id", () => {
+    const { d, old } = rolled();
+    expect(d.seasons[old].players[GID]).toMatchObject({ price: 6.5, gamePosition: "MID" });
+    const m = reconcileFantasyOnly(debut(d));
+    expect(m.players[GID]).toBeUndefined();
+    expect(m.seasons[old].players[GID]).toBeUndefined();
+    expect(seasonView(m, old).players["55"]).toMatchObject({ price: 6.5, gamePosition: "MID" });
+  });
+  it("keeps an existing real-id archive entry and drops the ghost's", () => {
+    const { d, old } = rolled();
+    const x = debut(d);
+    x.seasons[old].players["55"] = { price: 9, sitePoints: null, gamePosition: "DEF", gamePositionSource: "manual", inSquad: false };
+    const m = reconcileFantasyOnly(x);
+    expect(m.seasons[old].players[GID]).toBeUndefined();
+    expect(m.seasons[old].players["55"].price).toBe(9);
+  });
+  it("removeFantasyOnlyPlayer deletes the ghost's archived season data", () => {
+    const { d, old } = rolled();
+    const r = removeFantasyOnlyPlayer(d, GID);
+    expect(r.players[GID]).toBeUndefined();
+    expect(r.seasons[old].players[GID]).toBeUndefined();
+  });
+});
+
+describe("season id preservation", () => {
+  it("setMatchRound keeps seasonId", () => {
+    const d = setMatchRound(migrateSeasons(importedFixture()), 100, 14);
+    expect(d.matches["100"].seasonId).toBe(migrateSeasons(importedFixture()).meta.seasonId);
+  });
+  it("swapRounds keeps seasonId", () => {
+    let d = migrateSeasons(importedFixture());
+    d = applyImport(d, {
+      match: { eventId: 101, round: 2, kickoff: 1764950000000, status: "finished", homeTeamId: 2, awayTeamId: 1, homeScore: 0, awayScore: 0, goalTimes: { home: [], away: [] }, partial: false },
+      teams: [], players: [], appearances: [],
+    }, NOW);
+    const sid = d.matches["100"].seasonId;
+    expect(sid).toBeDefined();
+    d = swapRounds(d, 1, 2);
+    expect(d.matches["100"].seasonId).toBe(sid);
+    expect(d.matches["101"].seasonId).toBe(sid);
+  });
+  it("startNewSeason rejects an invalid id distinctly", () => {
+    const d = migrateSeasons(emptyData());
+    expect(() => startNewSeason(d, { seasonId: NaN, label: "x" })).toThrow(/invalid season id/);
+    expect(() => startNewSeason(d, { seasonId: "", label: "x" })).toThrow(/invalid season id/);
   });
 });

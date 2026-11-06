@@ -739,6 +739,13 @@ function mergeGhost(next, ghostId, realId) {
     delete next.absences[k];
     next.absences[`${k.slice(0, i)}:${realId}`] = a;
   }
+  // Archived past-season fantasy fields follow the player to the real id.
+  for (const season of Object.values(next.seasons || {})) {
+    const arch = season.players;
+    if (!arch || !(ghostId in arch)) continue;
+    if (!(realId in arch)) arch[realId] = arch[ghostId];
+    delete arch[ghostId];
+  }
   delete next.players[ghostId];
 }
 
@@ -777,6 +784,7 @@ export function removeFantasyOnlyPlayer(data, playerId) {
   for (const k of Object.keys(next.absences || {})) {
     if (k.slice(k.indexOf(":") + 1) === String(playerId)) delete next.absences[k];
   }
+  for (const season of Object.values(next.seasons || {})) delete season.players?.[playerId];
   return next;
 }
 
@@ -786,7 +794,8 @@ export const ARCHIVED_FIELDS = ["price", "sitePoints", "gamePosition", "gamePosi
 export function startNewSeason(data, { seasonId, label }) {
   const id = Number(seasonId);
   const old = data.meta.seasonId;
-  if (!id || id === old || data.seasons?.[id]) throw new Error(`season ${seasonId} already exists`);
+  if (!Number.isFinite(id) || id <= 0) throw new Error(`invalid season id: ${seasonId}`);
+  if (id === old || data.seasons?.[id]) throw new Error(`season ${seasonId} already exists`);
   const next = migrateSeasons(data);
   const archive = {};
   for (const [pid, p] of Object.entries(next.players)) {

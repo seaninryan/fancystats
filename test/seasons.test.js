@@ -40,8 +40,10 @@ describe("seasonView", () => {
     expect(seasonView(d, 99999).players["10"]).toMatchObject({ gamePosition: "MID", price: null });
   });
   it("nulls fantasy fields of players with no archive entry in a past season", () => {
-    const d = twoSeasons();
-    d.players["77"] = { ...d.players["10"], name: "New Guy", gamePosition: "DEF", price: 5 };
+    let d = twoSeasons();
+    d = applyImport(d, { match: match(201, 2, 0), teams: TEAMS, players: [{ id: 77, name: "New Guy", teamId: 1 }], appearances: [app(201, 77, 0)] }, NOW);
+    d = setPlayerField(d, 77, "gamePosition", "DEF");
+    d = setPlayerField(d, 77, "price", 5);
     expect(seasonView(d, 87682).players["77"]).toMatchObject({ gamePosition: null, price: null, inSquad: false });
   });
   it("derivations on a view only see that season", () => {
@@ -80,8 +82,16 @@ describe("previousSeasonTotals", () => {
   });
   it("null without a previous season or without appearances in it", () => {
     expect(previousSeasonTotals(migrateSeasons(emptyData()), 10)).toBeNull();
-    const d = twoSeasons();
-    d.players["77"] = { ...d.players["10"], name: "New Guy" };
+    let d = twoSeasons();
+    d = applyImport(d, { match: match(201, 2, 0), teams: TEAMS, players: [{ id: 77, name: "New Guy", teamId: 1 }], appearances: [app(201, 77, 0)] }, NOW);
     expect(previousSeasonTotals(d, 77)).toBeNull();
+  });
+  it("points is null when the player had no fantasy position that season", () => {
+    let d = migrateSeasons(emptyData());
+    d = applyImport(d, { match: match(100, 1, 1), teams: TEAMS, players: [{ id: 10, name: "A Keena", teamId: 1 }], appearances: [app(100, 10, 1)] }, NOW);
+    d = startNewSeason(d, { seasonId: 99999, label: "2027" });
+    const t = previousSeasonTotals(d, 10);
+    expect(t).toMatchObject({ apps: 1, goals: 1 });
+    expect(t.points).toBeNull();
   });
 });
