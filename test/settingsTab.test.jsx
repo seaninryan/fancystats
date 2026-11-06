@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { emptyData } from "../src/lib/store.js";
-import SettingsTab, { appliedMessage } from "../src/components/SettingsTab.jsx";
+import SettingsTab, { appliedMessage, backupFileName } from "../src/components/SettingsTab.jsx";
 
 const data = () => ({ ...emptyData(), teams: { 1: { name: "Bohemians", shortName: "BOH" } } });
 
@@ -26,6 +26,12 @@ describe("SettingsTab SSR", () => {
     const html = renderToStaticMarkup(<SettingsTab data={next} update={() => {}} />);
     expect(html).toContain("premier-division/192#id:99999");
   });
+  it("offers a backup download and a new-season flow instead of a raw season-id box", () => {
+    const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
+    expect(html).toContain("Download backup");
+    expect(html).toContain("Start new season");
+    expect(html).not.toContain("Season id <input");
+  });
   it("keeps the legacy paste card collapsed by default", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
     expect(html).toContain("<details");
@@ -40,5 +46,11 @@ describe("appliedMessage", () => {
     expect(appliedMessage(60, "DEF")).toBe("Applied 60 players — defender positions");
     expect(appliedMessage(70, "MID")).toBe("Applied 70 players — midfielder positions");
     expect(appliedMessage(40, "FWD")).toBe("Applied 40 players — forward positions");
+  });
+});
+
+describe("backupFileName", () => {
+  it("dates the file", () => {
+    expect(backupFileName(new Date("2026-11-06T10:00:00Z"))).toBe("fancystats-backup-2026-11-06.json");
   });
 });

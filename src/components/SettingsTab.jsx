@@ -1,11 +1,12 @@
 // src/components/SettingsTab.jsx
 import { useState } from "react";
 import { parsePaste, matchPlayers } from "../lib/pasteImport.js";
-import { applyPasteResults } from "../lib/store.js";
+import { applyPasteResults, startNewSeason } from "../lib/store.js";
 import UnmatchedLinks from "./UnmatchedLinks.jsx";
 import FantasyImport from "./FantasyImport.jsx";
 import ConsoleImport from "./ConsoleImport.jsx";
 import Flash from "./Flash.jsx";
+import { seasonList } from "../lib/seasons.js";
 
 const KINDS = [
   ["price", "Prices (Statistic = Value, Position = All)", "prices"],
@@ -21,6 +22,63 @@ const KINDS = [
 export function appliedMessage(count, kind) {
   const short = (KINDS.find(([k]) => k === kind) || [])[2] || kind;
   return `Applied ${count} players — ${short}`;
+}
+
+export function backupFileName(date) {
+  return `fancystats-backup-${date.toISOString().slice(0, 10)}.json`;
+}
+
+function downloadBackup(data) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = backupFileName(new Date());
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function NewSeasonCard({ data, update }) {
+  const [open, setOpen] = useState(false);
+  const [id, setId] = useState("");
+  const [label, setLabel] = useState("");
+  const [err, setErr] = useState(null);
+  const cur = seasonList(data).find((s) => s.current);
+  const start = () => {
+    const n = Number(id);
+    if (!n || n === Number(data.meta.seasonId) || data.seasons?.[n]) { setErr(`Season ${id} already exists`); return; }
+    update((d) => startNewSeason(d, { seasonId: n, label: label.trim() || id }));
+    setOpen(false); setId(""); setLabel(""); setErr(null);
+  };
+  return (
+    <div className="card">
+      <h3>Season</h3>
+      <p className="dim">
+        Current: {cur?.label ?? data.meta.seasonId} (tournament {data.meta.tournamentId} · season {data.meta.seasonId}).
+        Find a new season id via api.sofascore.com/api/v1/unique-tournament/{data.meta.tournamentId}/seasons (open in a browser tab).
+      </p>
+      <div className="row">
+        <button onClick={() => downloadBackup(data)}>⬇ Download backup</button>
+        {!open && <button onClick={() => setOpen(true)}>Start new season…</button>}
+      </div>
+      {open && (
+        <div style={{ marginTop: 8 }}>
+          <div className="row">
+            <label>Season id <input value={id} onChange={(e) => setId(e.target.value)} style={{ width: 110 }} /></label>
+            <label>Label <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="2027" style={{ width: 80 }} /></label>
+          </div>
+          <p className="dim">
+            {cur?.label ?? "This season"} stays viewable from the season picker. Each player's price, site points,
+            fantasy position and squad tick are saved with it, then cleared for the new season. Names, stars,
+            team colours and club mappings carry over. Nothing is deleted — download a backup first anyway.
+          </p>
+          <div className="row">
+            <button className="primary" disabled={!Number(id)} onClick={start}>Start new season</button>
+            <button onClick={() => { setOpen(false); setErr(null); }}>Cancel</button>
+          </div>
+          {err && <p className="err">{err}</p>}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function SettingsTab({ data, update }) {
@@ -94,21 +152,7 @@ export default function SettingsTab({ data, update }) {
           </div>
         )}
       </details>
-      <div className="card">
-        <h3>Season</h3>
-        <p className="dim">
-          Tournament {data.meta.tournamentId} · season {data.meta.seasonId}.
-          New season? Find the id via api.sofascore.com/api/v1/unique-tournament/192/seasons
-          (open in a browser tab) and update below.
-        </p>
-        <div className="row">
-          <label>Season id <input defaultValue={data.meta.seasonId} style={{ width: 110 }}
-            onBlur={(e) => {
-              const v = Number(e.target.value);
-              if (v && v !== data.meta.seasonId) update((d) => ({ ...d, meta: { ...d.meta, seasonId: v } }));
-            }} /></label>
-        </div>
-      </div>
+      <NewSeasonCard data={data} update={update} />
       <div className="card row">
         <button onClick={() => window.location.reload()}>⟳ Resync from Drive</button>
         <button onClick={signOut}>Sign out</button>
