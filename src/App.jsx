@@ -74,7 +74,14 @@ export default function App() {
   const shownSeason = viewSeason ?? curSeason;
   const readOnly = data != null && Number(shownSeason) !== Number(curSeason);
   const view = useMemo(() => (data ? seasonView(data, shownSeason) : null), [data, shownSeason]);
-  const noop = useCallback(() => {}, []);
+  // Past seasons are read-only: edit attempts surface a brief notice instead of silently doing nothing.
+  const [roNotice, setRoNotice] = useState(false);
+  const roUpdate = useCallback(() => setRoNotice(true), []);
+  useEffect(() => {
+    if (!roNotice) return;
+    const t = setTimeout(() => setRoNotice(false), 3000);
+    return () => clearTimeout(t);
+  }, [roNotice]);
   const changeSeason = useCallback((id) => {
     setViewSeason(id);
     setOpenPlayerId(null);
@@ -130,6 +137,11 @@ export default function App() {
           </div>
         ) : null;
       })()}
+      {readOnly && roNotice && (
+        <div className="banner warn" role="status">
+          Past seasons are read-only — switch back to {data.seasons?.[curSeason]?.label ?? curSeason} to edit.
+        </div>
+      )}
       {authExpired && (
         <div className="banner err row" role="alert">
           Session expired — <button onClick={handleSignIn}>Reconnect</button>
@@ -137,11 +149,11 @@ export default function App() {
       )}
       <main className="page">
         {openPlayerId && view.players[openPlayerId] && (
-          <PlayerDetail data={view} fullData={data} update={readOnly ? noop : update} readOnly={readOnly} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
+          <PlayerDetail data={view} fullData={data} update={readOnly ? roUpdate : update} readOnly={readOnly} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
         )}
         {/* keep the tab mounted while a player is open so filters/sort survive the round-trip */}
         <div style={{ display: openPlayerId && view.players[openPlayerId] ? "none" : undefined }}>
-          <Active data={view} fullData={data} update={readOnly ? noop : update} readOnly={readOnly} openPlayer={setOpenPlayerId} openTeam={openTeam} focusTeam={focusTeam} />
+          <Active data={view} fullData={data} update={readOnly ? roUpdate : update} readOnly={readOnly} openPlayer={setOpenPlayerId} openTeam={openTeam} focusTeam={focusTeam} />
         </div>
       </main>
     </div>
