@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { initAuth, isSignedIn, signIn, saveLatest, driveLoad, startTokenKeepAlive } from "./lib/drive.js";
-import { emptyData, staleInfo } from "./lib/store.js";
+import { emptyData, staleInfo, migrateSeasons } from "./lib/store.js";
+import { seasonView } from "./lib/seasons.js";
+import SeasonBar from "./components/SeasonBar.jsx";
 import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
 import TeamsTab from "./components/TeamsTab.jsx";
@@ -26,6 +28,7 @@ export default function App() {
   const [authExpired, setAuthExpired] = useState(false);
   const [openPlayerId, setOpenPlayerId] = useState(null);
   const [focusTeam, setFocusTeam] = useState(null); // { teamId, nonce } — set by team links
+  const [viewSeason, setViewSeason] = useState(null); // null = current season
   const dirtyRef = useRef(false);
 
   useEffect(() => {
@@ -39,8 +42,8 @@ export default function App() {
     if (phase !== "loading") return;
     startTokenKeepAlive();
     driveLoad()
-      .then((loaded) => { setData(loaded ? { ...emptyData(), ...loaded } : emptyData()); setPhase("ready"); })
-      .catch(() => { setData(emptyData()); setPhase("ready"); });
+      .then((loaded) => { setData(migrateSeasons(loaded ? { ...emptyData(), ...loaded } : emptyData())); setPhase("ready"); })
+      .catch(() => { setData(migrateSeasons(emptyData())); setPhase("ready"); });
   }, [phase]);
 
   // Single mutation entry point. The updater stays pure; persisting happens in
@@ -65,6 +68,17 @@ export default function App() {
     setOpenPlayerId(null);
     setTab("teams");
     window.scrollTo({ top: 0 });
+  }, []);
+
+  const curSeason = data?.meta.seasonId;
+  const shownSeason = viewSeason ?? curSeason;
+  const readOnly = data != null && Number(shownSeason) !== Number(curSeason);
+  const view = useMemo(() => (data ? seasonView(data, shownSeason) : null), [data, shownSeason]);
+  const noop = useCallback(() => {}, []);
+  const changeSeason = useCallback((id) => {
+    setViewSeason(id);
+    setOpenPlayerId(null);
+    setTab((t) => (t === "settings" ? "matches" : t));
   }, []);
 
   const handleSignIn = async () => {
@@ -94,19 +108,21 @@ export default function App() {
     );
   }
 
-  const Active = (TABS.find(([k]) => k === tab) ?? TABS[0])[2];
+  const tabs = readOnly ? TABS.filter(([k]) => k !== "settings") : TABS;
+  const Active = (tabs.find(([k]) => k === tab) ?? tabs[0])[2];
   return (
     <div>
-      <nav className="tabs">
-        {TABS.map(([key, label]) => (
+      <nav className="tabs" style={{ flexWrap: "wrap" }}>
+        {tabs.map(([key, label]) => (
           <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setOpenPlayerId(null); window.scrollTo({ top: 0 }); }}>{label}</button>
         ))}
+        <SeasonBar data={data} viewSeason={shownSeason} onChange={changeSeason} />
         <span className="dim" role="status" aria-live="polite" style={{ marginLeft: "auto", alignSelf: "center" }}>
           {saveState === "saving" ? "Saving…" : saveState === "error" ? "⚠ not saved" : `v${VERSION}`}
         </span>
       </nav>
       {(() => {
-        const stale = staleInfo(data, Date.now());
+        const stale = readOnly ? { count: 0 } : staleInfo(view, Date.now());
         return stale.count > 0 && tab !== "settings" ? (
           <div className="banner warn" role="status">
             Stats may be out of date — {stale.count} match{stale.count > 1 ? "es" : ""} played since the last update.{" "}
@@ -120,12 +136,12 @@ export default function App() {
         </div>
       )}
       <main className="page">
-        {openPlayerId && data.players[openPlayerId] && (
-          <PlayerDetail data={data} update={update} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
+        {openPlayerId && view.players[openPlayerId] && (
+          <PlayerDetail data={view} fullData={data} update={readOnly ? noop : update} readOnly={readOnly} playerId={openPlayerId} onBack={() => setOpenPlayerId(null)} />
         )}
         {/* keep the tab mounted while a player is open so filters/sort survive the round-trip */}
-        <div style={{ display: openPlayerId && data.players[openPlayerId] ? "none" : undefined }}>
-          <Active data={data} update={update} openPlayer={setOpenPlayerId} openTeam={openTeam} focusTeam={focusTeam} />
+        <div style={{ display: openPlayerId && view.players[openPlayerId] ? "none" : undefined }}>
+          <Active data={view} fullData={data} update={readOnly ? noop : update} readOnly={readOnly} openPlayer={setOpenPlayerId} openTeam={openTeam} focusTeam={focusTeam} />
         </div>
       </main>
     </div>
