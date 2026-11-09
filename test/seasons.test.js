@@ -1,7 +1,7 @@
 // test/seasons.test.js
 import { describe, it, expect } from "vitest";
 import { emptyData, applyImport, setAdjustment, setAbsence, setPlayerField, migrateSeasons, startNewSeason, playerTotals, leagueTable } from "../src/lib/store.js";
-import { seasonView, seasonList, previousSeasonId, previousSeasonTotals } from "../src/lib/seasons.js";
+import { seasonView, guestTeams, seasonList, previousSeasonId, previousSeasonTotals } from "../src/lib/seasons.js";
 
 const NOW = 1765000000000;
 const TEAMS = [{ id: 1, name: "Shamrock Rovers", shortName: "SRO" }, { id: 2, name: "Bohemians", shortName: "BOH" }];
@@ -93,5 +93,35 @@ describe("previousSeasonTotals", () => {
     const t = previousSeasonTotals(d, 10);
     expect(t).toMatchObject({ apps: 1, goals: 1 });
     expect(t.points).toBeNull();
+  });
+});
+
+describe("guest clubs (end-of-season playoffs)", () => {
+  const T = [1, 2, 3, 4].map((id) => ({ id, name: `Club ${id}`, shortName: `C${id}` }));
+  const m = (eventId, h, a) => ({ eventId, round: 1, kickoff: NOW - 1e9 + eventId, status: "finished", homeTeamId: h, awayTeamId: a, homeScore: 0, awayScore: 0, goalTimes: { home: [], away: [] }, partial: false });
+  const a = (eventId, playerId, teamId) => ({ ...app(eventId, playerId, 0), teamId });
+  function season() {
+    let d = migrateSeasons(emptyData());
+    for (let i = 0; i < 10; i++) {
+      d = applyImport(d, { match: m(300 + i, 1, 2), teams: T, players: [{ id: 11, name: "Home P", teamId: 1 }], appearances: [a(300 + i, 11, 1)] }, NOW);
+    }
+    // Playoff: club 2 v guest club 3; player 33 is a guest; player 12 (club 2) plays it too.
+    d = applyImport(d, { match: m(400, 2, 3), teams: T, players: [{ id: 33, name: "Guest", teamId: 3 }, { id: 12, name: "Two", teamId: 2 }], appearances: [a(400, 33, 3), a(400, 12, 2)] }, NOW);
+    return d;
+  }
+  it("a club with under a quarter of the busiest club's matches is a guest", () => {
+    const d = season();
+    expect([...guestTeams(d.matches)]).toEqual([3]);
+    expect(guestTeams({ 1: m(1, 1, 2), 2: m(2, 2, 3) }).size).toBe(0); // too early to judge
+  });
+  it("the view drops guest matches, their appearances, the guest club and its players", () => {
+    const v = seasonView(season(), 87682);
+    expect(Object.keys(v.matches)).not.toContain("400");
+    expect(Object.keys(v.appearances).some((k) => k.startsWith("400:"))).toBe(false);
+    expect(v.teams["3"]).toBeUndefined();
+    expect(v.players["33"]).toBeUndefined();
+    expect(v.players["11"]).toBeDefined();
+    expect(v.players["12"]).toBeDefined(); // a league club's player stays
+    expect(leagueTable(v).map((r) => r.teamId).sort()).toEqual([1, 2]);
   });
 });
