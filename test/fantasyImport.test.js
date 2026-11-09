@@ -102,6 +102,11 @@ describe("buildSyncSnippet", () => {
   it("is valid JavaScript", () => {
     expect(() => new Function(snip)).not.toThrow();
   });
+  it("stops on a lost session instead of producing empty pages", () => {
+    expect(snip).toContain("r.redirected");
+    expect(snip).toContain("h2.pageTitle");
+    expect(snip).toContain("session expired");
+  });
   it("embeds the team id and reads the four site pages", () => {
     expect(snip).toContain("TEAM = 7378");
     for (const p of ["/Stats/PlayerStats", "/Team/Transfers", "/Results?teamId=", "/ViewPlayer/ViewPlayer?playerId="]) {

@@ -119,6 +119,7 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
   const load = async (url, init) => {
     for (let attempt = 0; ; attempt++) {
       const r = await fetch(url, Object.assign({ credentials: "include" }, init));
+      if (r.redirected && /login|account/i.test(r.url)) throw new Error("session expired — log in again, then re-run");
       if (r.ok) {
         const doc = new DOMParser().parseFromString(await r.text(), "text/html");
         await sleep(300);
@@ -198,6 +199,7 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
     const myTeam = {}, squadIds = new Map();
     for (const gw of gws) {
       const doc = gw === 1 ? first : await load("/Results?teamId=" + TEAM + "&gameweek=" + gw);
+      if (gw !== 1 && !doc.querySelector("select option")) throw new Error("couldn't read your Results page for GW " + gw + " — session expired? log in and re-run");
       const pitch = doc.querySelector(".pitch");
       if (!pitch) continue;
       const lines = [...pitch.children].map((row) => [...row.querySelectorAll("[onclick^=playerScore]")].map(card).filter(Boolean)).filter((l) => l.length);
@@ -215,6 +217,7 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
     for (const row of rows.values()) if (row.siteId == null && squadIds.has(row.name)) row.siteId = squadIds.get(row.name);
     // 4. every player's season, gameweek by gameweek
     const history = {};
+    const totalOf = new Map([...rows.values()].filter((x) => x.siteId != null).map((x) => [x.siteId, x.sitePoints]));
     let n = 0;
     for (const id of ids) {
       const doc = await load("/ViewPlayer/ViewPlayer?playerId=" + id);
@@ -224,6 +227,9 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
           .filter((r) => r.length === 3 && r[0] !== "Stat").map((r) => [r[0], r[1], num(r[2])]);
         return [num(txt(b.querySelector(".card-header label"))), club(imgs[0]), club(imgs[1]), num(txt(b.querySelector(".card-body p"))), stats];
       });
+      if (!doc.querySelector("h2.pageTitle") || (!history[id].length && typeof totalOf.get(id) === "number" && totalOf.get(id) !== 0)) {
+        throw new Error("couldn't read player " + id + "'s history — session expired? log in and re-run");
+      }
       if (++n % 25 === 0) say("history: " + n + "/" + ids.size);
     }
     const blob = { meta: { source: "fantasyloi-sync", version: 1, capturedAt: Date.now(), siteTeamId: TEAM, clubs: clubs },
