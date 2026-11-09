@@ -15,7 +15,6 @@ const numOrNull = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-// Pure: validate + normalize a pasted capture. Throws user-facing messages.
 // One capture row -> the shape every import path uses.
 function normalizePlayerRow(p) {
   return {
@@ -27,6 +26,7 @@ function normalizePlayerRow(p) {
   };
 }
 
+// Pure: validate + normalize a pasted capture. Throws user-facing messages.
 export function parseFantasyBlob(text) {
   let blob;
   try {
