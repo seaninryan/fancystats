@@ -48,9 +48,40 @@ describe("siteIndex + appearancePoints", () => {
     const v = view(sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] }));
     expect(appearancePoints(v, v.appearances["101:10"])).toMatchObject({ total: 4, source: "ours", site: null });
   });
-  it("ignores crest order and a repeated current-club crest", () => {
-    const v = view(sync(base(), { "501": [[2, "c1", "c1", 7, [["Appearance", "Full Game", 3]]]] }));
+  const played = [["Appearance", "Full Game", 3]];
+  const dnp = [["Appearance", "Didn't Play", 0]];
+  it("ignores crest order", () => {
+    const v = view(sync(base(), { "501": [[2, "c1", "c3", 7, played]] }));
     expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
+  });
+  it("the player's crest can be his current club; the opponent crest decides", () => {
+    const v = view(sync(base(), { "501": [[2, "c3", "c3", 7, played]] }));
+    expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
+  });
+  it("a block whose opponent doesn't match isn't forced onto the only match that round", () => {
+    const v = view(sync(base(), { "501": [[2, "c1", "c2", 7, played]] }));
+    expect(siteIndex(v).unresolved).toEqual([{ playerId: "10", siteId: 501, gw: 2, total: 7, reason: "no-match" }]);
+    expect(appearancePoints(v, v.appearances["101:10"])).toMatchObject({ source: "ours", total: 4 });
+  });
+  it("Didn't Play for the other match of a double gameweek doesn't zero the one he played", () => {
+    const a = [[2, "c1", "c3", 7, played], [2, "c1", "c2", 0, dnp]];
+    for (const history of [a, [...a].reverse()]) {
+      const v = view(sync(base(), { "501": history }));
+      expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
+    }
+  });
+  it("two played blocks for one match: the first wins", () => {
+    const v = view(sync(base(), { "501": [[2, "c1", "c3", 7, played], [2, "c3", "c1", 5, played]] }));
+    expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
+  });
+  it("weeks the site has no block for score 0, up to the latest captured gameweek", () => {
+    let v = view(sync(base(), { "501": [[2, "c3", "c1", 7, played]] }));
+    const r = appearancePoints(v, v.appearances["100:10"]);
+    expect(r).toMatchObject({ total: 0, source: "site" });
+    expect(r.site.notInGame).toBe(true);
+    expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
+    v = view(sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] }));
+    expect(appearancePoints(v, v.appearances["101:10"]).source).toBe("ours");
   });
   it("splits a double gameweek by the clubs in each block", () => {
     let d = imp(base(), match(102, 1, 1, 3, 0, 0), [app(102, 10, 1)]);
