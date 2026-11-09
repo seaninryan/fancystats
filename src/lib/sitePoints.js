@@ -59,7 +59,8 @@ export function siteIndex(view) {
     if (view.players[pid].teamId != null) teams.add(Number(view.players[pid].teamId));
     const taken = new Map(); // key -> whether the block stored there was a played one
     for (const [gw, clubA, clubB, total, rows] of blocks) {
-      const played = playedIn(rows);
+      // A "Didn't Play" week can still cost points (booked on the bench): it counts like a played one.
+      const played = playedIn(rows) || Number(total) !== 0;
       const flag = (reason) => {
         if (played) out.unresolved.push({ playerId: pid, siteId: Number(siteKey), gw: Number(gw), total: Number(total), reason });
       };

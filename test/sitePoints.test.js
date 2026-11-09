@@ -108,6 +108,11 @@ describe("siteIndex + appearancePoints", () => {
     expect(appearancePoints(v, v.appearances["100:10"])).toMatchObject({ total: 0, source: "site" });
     expect(siteIndex(v).unresolved).toEqual([]);
   });
+  it("a Didn't Play week that still cost points (a bench card) is listed like a missing appearance", () => {
+    const benchCard = [["Appearance", "Didn't Play", 0], ["Team Result", "N/A", 0], ["Yellow Cards", "1", -1]];
+    const v = view(sync(base(), { "501": [[3, "c1", "c2", -1, benchCard]] }));
+    expect(siteIndex(v).unresolved).toEqual([{ playerId: "10", siteId: 501, gw: 3, total: -1, reason: "no-appearance" }]);
+  });
   it("site points apply without a game position", () => {
     let d = sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] });
     d = setPlayerField(d, 10, "gamePosition", null);
