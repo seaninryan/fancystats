@@ -967,6 +967,10 @@ describe("reconcileFantasyOnly", () => {
     expect(d.players["fx-danny-mandroiu-1"]).toBeUndefined();
     expect(d.players["99"].price).toBe(6.5);
   });
+  it("carries the ghost's site link onto the real player", () => {
+    const d = reconcileFantasyOnly(debut(addFantasyOnlyPlayers(importedFixture(), [{ ...GHOST_ROW, siteId: 777 }], NOW), 99, "Danny Mandroiu"));
+    expect(d.players["99"].siteId).toBe(777);
+  });
   it("carries user-owned fields and fills only empty captured fields", () => {
     let d = withGhost();
     d = setPlayerField(d, "fx-danny-mandroiu-1", "starred", true);
@@ -1443,6 +1447,13 @@ describe("applySiteSync", () => {
     });
     expect(d.players["10"].siteId).toBe(501);
     expect(d.players["10"].price).toBe(7.5);
+  });
+  it("a created fantasy-only player gets its siteId and the inSquad sync", () => {
+    const row = { name: "New Guy", teamId: 1, clubId: "c1", gamePosition: "MID", price: 4.5, sitePoints: 0, siteId: 503 };
+    const d = applySiteSync(importedFixture(), parsed(), rows, NOW, [row]);
+    const g = d.players[fantasyOnlyId("New Guy", 1)];
+    expect(g.siteId).toBe(503);
+    expect(g.inSquad).toBe(true); // 503 is on GW2's bench
   });
   it("syncs inSquad to the latest captured gameweek (lines + bench)", () => {
     let d = importedFixture();

@@ -2,7 +2,7 @@
 import { useMemo, useState } from "react";
 import { buildSyncSnippet, parseSyncBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
-import { applySiteSync, addFantasyOnlyPlayers } from "../lib/store.js";
+import { applySiteSync } from "../lib/store.js";
 import { seasonView } from "../lib/seasons.js";
 import { unresolvedSummary } from "../lib/sitePoints.js";
 import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
@@ -78,17 +78,14 @@ export default function FantasyImport({ data, fullData, update }) {
   // What the site data will look like once applied: a trial sync, projected like the app does.
   const attention = useMemo(() => {
     if (!preview) return [];
-    const trial = applySiteSync(fullData, preview.parsed, [...preview.matched, ...linked], 0);
+    const trial = applySiteSync(fullData, preview.parsed, [...preview.matched, ...linked], 0, created);
     return unresolvedSummary(seasonView(trial, trial.meta.seasonId));
   }, [preview, fullData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const apply = () => {
     const now = Date.now(); // updaters stay pure
     const rows = [...preview.matched, ...linked];
-    update((d) => {
-      const next = applySiteSync(d, preview.parsed, rows, now);
-      return created.length ? addFantasyOnlyPlayers(next, created, now) : next;
-    });
+    update((d) => applySiteSync(d, preview.parsed, rows, now, created));
     const gws = Object.keys(preview.parsed.myTeam).length;
     setFlash(`${appliedMessage(rows.length, created.length)} · ${gws} gameweek${gws === 1 ? "" : "s"} of your team`);
     setPreview(null);

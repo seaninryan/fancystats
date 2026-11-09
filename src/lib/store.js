@@ -266,7 +266,17 @@ export function applyFantasyRows(data, rows, now) {
 // history and your team are raw facts stored per season and replaced wholesale;
 // mapping them onto matches happens at render time (sitePoints.js), so a round fix
 // re-points them retroactively. inSquad follows the latest captured gameweek.
-export function applySiteSync(data, parsed, rows, now) {
+// created: unmatched capture rows the user chose to add as fantasy-only players. They are
+// created first, then treated as matched rows, so they get their siteId link and the
+// inSquad sync like everyone else.
+export function applySiteSync(data, parsed, rows, now, created = []) {
+  if (created.length) {
+    data = addFantasyOnlyPlayers(data, created, now);
+    const extra = created
+      .map((c) => ({ ...c, playerId: fantasyOnlyId(c.name, c.teamId) }))
+      .filter((c) => c.playerId != null);
+    rows = [...rows, ...extra];
+  }
   const next = applyFantasyRows(data, rows, now); // already a clone
   // a site id belongs to one player: re-linking moves it
   const claimed = new Map(rows.filter((r) => r.siteId != null).map((r) => [Number(r.siteId), String(r.playerId)]));
@@ -724,6 +734,7 @@ export function addFantasyOnlyPlayers(data, rows, now) {
     });
     if (r.price != null) { p.price = r.price; p.priceUpdatedAt = now; }
     if (r.sitePoints != null) p.sitePoints = r.sitePoints;
+    if (r.siteId != null) p.siteId = Number(r.siteId);
     if (r.gamePosition && p.gamePositionSource !== "manual") {
       p.gamePosition = r.gamePosition;
       p.gamePositionSource = "fantasy";
@@ -755,6 +766,7 @@ function mergeGhost(next, ghostId, realId) {
   }
   if (r.price == null && g.price != null) { r.price = g.price; r.priceUpdatedAt = g.priceUpdatedAt; }
   if (r.sitePoints == null && g.sitePoints != null) r.sitePoints = g.sitePoints;
+  if (g.siteId != null && r.siteId == null) r.siteId = g.siteId;
   for (const [k, a] of Object.entries(next.absences || {})) {
     const i = k.indexOf(":");
     if (k.slice(i + 1) !== ghostId) continue;
