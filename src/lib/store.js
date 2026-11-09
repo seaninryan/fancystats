@@ -9,7 +9,7 @@ export function emptyData() {
   return {
     version: 1,
     meta: { tournamentId: 192, seasonId: 87682, lastEventSync: null, sofascoreToken: null, fantasyClubMap: {} },
-    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {}, seasons: {},
+    teams: {}, matches: {}, players: {}, appearances: {}, adjustments: {}, absences: {}, seasons: {}, site: {},
   };
 }
 
@@ -257,6 +257,35 @@ export function applyFantasyRows(data, rows, now) {
       p.gamePositionSource = "fantasy";
     }
     if (r.alias) p.pasteAlias = r.alias;
+    if (r.siteId != null) p.siteId = Number(r.siteId);
+  }
+  return next;
+}
+
+// Fold a Fantasy sync (parseSyncBlob output) into the save. rows: matched capture
+// rows [{playerId, siteId, gamePosition, price, sitePoints, alias?}]. The site's
+// history and your team are raw facts stored per season and replaced wholesale;
+// mapping them onto matches happens at render time (sitePoints.js), so a round fix
+// re-points them retroactively. inSquad follows the latest captured gameweek.
+export function applySiteSync(data, parsed, rows, now) {
+  const next = applyFantasyRows(data, rows, now); // already a clone
+  // a site id belongs to one player: re-linking moves it
+  const claimed = new Map(rows.filter((r) => r.siteId != null).map((r) => [Number(r.siteId), String(r.playerId)]));
+  for (const [pid, p] of Object.entries(next.players)) {
+    if (p.siteId != null && claimed.has(Number(p.siteId)) && claimed.get(Number(p.siteId)) !== pid) p.siteId = null;
+  }
+  next.site = {
+    ...(next.site || {}),
+    [next.meta.seasonId]: {
+      capturedAt: parsed.capturedAt, siteTeamId: parsed.siteTeamId,
+      clubs: parsed.clubs, history: parsed.history, myTeam: parsed.myTeam,
+    },
+  };
+  const gws = Object.keys(parsed.myTeam || {}).map(Number).filter(Number.isFinite);
+  if (gws.length) {
+    const latest = parsed.myTeam[Math.max(...gws)];
+    const squad = new Set([...(latest.lines || []).flat(), ...(latest.bench || [])].map(Number));
+    for (const p of Object.values(next.players)) p.inSquad = p.siteId != null && squad.has(Number(p.siteId));
   }
   return next;
 }

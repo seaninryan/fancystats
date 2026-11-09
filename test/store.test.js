@@ -15,6 +15,7 @@ import {
   applyFantasyRows,
   migrateSeasons, startNewSeason,
   fantasyOnlyId, addFantasyOnlyPlayers, reconcileFantasyOnly, removeFantasyOnlyPlayer,
+  applySiteSync,
 } from "../src/lib/store.js";
 import { seasonView } from "../src/lib/seasons.js";
 
@@ -1418,5 +1419,67 @@ describe("season id preservation", () => {
     expect(() => startNewSeason(d, { seasonId: "", label: "x" })).toThrow(/invalid season id/);
     expect(() => startNewSeason(d, { seasonId: 2027.5, label: "x" })).toThrow(/invalid season id/);
     expect(() => startNewSeason(d, { seasonId: -5, label: "x" })).toThrow(/invalid season id/);
+  });
+});
+
+describe("applySiteSync", () => {
+  const parsed = (over = {}) => ({
+    capturedAt: NOW, siteTeamId: 7378,
+    clubs: [{ id: "c1", name: "Shamrock Rovers" }, { id: "c2", name: "Bohemians" }],
+    players: [],
+    history: { "501": [[1, "c1", "c2", 12, [["Appearance", "Full Game", 3]]]] },
+    myTeam: {
+      "1": { lines: [[502], [], [], []], bench: [], captain: 502, shown: {}, names: {}, total: 1 },
+      "2": { lines: [[501], [], [], []], bench: [503], captain: 501, shown: { "501": 24 }, names: { "501": "A Keena", "503": "Someone Else" }, total: 30 },
+    },
+    ...over,
+  });
+  const rows = [{ playerId: "10", siteId: 501, price: 7.5, sitePoints: 120, gamePosition: "FWD" }];
+
+  it("stores the site season raw under the current season id and links siteId", () => {
+    const d = applySiteSync(importedFixture(), parsed(), rows, NOW);
+    expect(d.site[d.meta.seasonId]).toEqual({
+      capturedAt: NOW, siteTeamId: 7378, clubs: parsed().clubs, history: parsed().history, myTeam: parsed().myTeam,
+    });
+    expect(d.players["10"].siteId).toBe(501);
+    expect(d.players["10"].price).toBe(7.5);
+  });
+  it("syncs inSquad to the latest captured gameweek (lines + bench)", () => {
+    let d = importedFixture();
+    d = setPlayerField(d, 11, "inSquad", true);
+    d = applySiteSync(d, parsed(), rows, NOW);
+    expect(d.players["10"].inSquad).toBe(true);  // 501 is in GW2's lines
+    expect(d.players["11"].inSquad).toBe(false); // no site id
+  });
+  it("leaves inSquad alone when no team was captured", () => {
+    let d = setPlayerField(importedFixture(), 11, "inSquad", true);
+    d = applySiteSync(d, parsed({ myTeam: {} }), rows, NOW);
+    expect(d.players["11"].inSquad).toBe(true);
+  });
+  it("moves a site id that is re-linked to another player", () => {
+    let d = applySiteSync(importedFixture(), parsed(), rows, NOW);
+    d = applySiteSync(d, parsed(), [{ playerId: "11", siteId: 501 }], NOW);
+    expect(d.players["11"].siteId).toBe(501);
+    expect(d.players["10"].siteId).toBe(null);
+  });
+  it("keeps user-owned fields and does not mutate its input", () => {
+    let d = importedFixture();
+    d = setPlayerField(d, 10, "gamePosition", "MID");
+    d = { ...d, players: { ...d.players, "10": { ...d.players["10"], gamePositionSource: "manual", starred: true } } };
+    d = setAdjustment(d, "100:10", { assists: 1, note: "x" });
+    const before = structuredClone(d);
+    const next = applySiteSync(d, parsed(), rows, NOW);
+    expect(d).toEqual(before);
+    expect(next.players["10"].gamePosition).toBe("MID");
+    expect(next.players["10"].starred).toBe(true);
+    expect(next.adjustments["100:10"].assists).toBe(1);
+  });
+  it("emptyData has an empty site map", () => {
+    expect(emptyData().site).toEqual({});
+  });
+  it("seasonView projects only the viewed season's site data", () => {
+    const d = applySiteSync(importedFixture(), parsed(), rows, NOW);
+    expect(seasonView(d, d.meta.seasonId).site.siteTeamId).toBe(7378);
+    expect(seasonView(d, 99999).site).toBe(null);
   });
 });

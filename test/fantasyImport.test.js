@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet, shouldCreateRow } from "../src/lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet, shouldCreateRow, parseSyncBlob } from "../src/lib/fantasyImport.js";
 
 const goodBlob = () => ({
   meta: { source: "fantasyloi", capturedAt: 1770000000000, clubs: [{ id: "14420", name: "Bohemians" }] },
@@ -167,5 +167,40 @@ describe("shouldCreateRow", () => {
   it("ignores existing fantasy-only records when judging ambiguity", () => {
     const withGhost = { ...players, "fx-daniel-mandroiu-2334": { name: "Daniel Mandroiu", teamId: 2334, fantasyOnly: true } };
     expect(shouldCreateRow(row("Daniel Mandroiu"), withGhost)).toBe(true);
+  });
+});
+
+describe("parseSyncBlob", () => {
+  const blob = (over = {}) => JSON.stringify({
+    meta: { source: "fantasyloi-sync", version: 1, capturedAt: 1765000000000, siteTeamId: 7378,
+      clubs: [{ id: "14420", name: "Bohemians" }] },
+    players: [{ name: " Colm Whelan ", clubId: 14420, position: "FWD", price: "6.5", sitePoints: 137, siteId: "501" }],
+    history: { "501": [[1, "14420", "55388", 9, [["Appearance", "Full Game", 3]]]] },
+    myTeam: { "1": { lines: [[501], [], [], []], bench: [], captain: 501, shown: { "501": 18 }, names: { "501": "Colm Whelan" }, total: 18 } },
+    ...over,
+  });
+
+  it("normalizes players like the price import and keeps siteId as a number", () => {
+    const r = parseSyncBlob(blob());
+    expect(r.players).toEqual([{ name: "Colm Whelan", clubId: "14420", gamePosition: "FWD", price: 6.5, sitePoints: 137, siteId: 501 }]);
+  });
+  it("carries meta, history and myTeam through", () => {
+    const r = parseSyncBlob(blob());
+    expect(r.capturedAt).toBe(1765000000000);
+    expect(r.siteTeamId).toBe(7378);
+    expect(r.clubs).toEqual([{ id: "14420", name: "Bohemians" }]);
+    expect(r.history["501"][0][3]).toBe(9);
+    expect(r.myTeam["1"].captain).toBe(501);
+  });
+  it("defaults missing history and myTeam to empty objects", () => {
+    const r = parseSyncBlob(blob({ history: undefined, myTeam: undefined }));
+    expect(r.history).toEqual({});
+    expect(r.myTeam).toEqual({});
+  });
+  it("rejects bad JSON, the wrong source, an unknown version and an empty capture", () => {
+    expect(() => parseSyncBlob("{nope")).toThrow(/Couldn't read/);
+    expect(() => parseSyncBlob(JSON.stringify({ meta: { source: "fantasyloi" }, players: [] }))).toThrow(/not a Fantasy sync file/);
+    expect(() => parseSyncBlob(blob({ meta: { source: "fantasyloi-sync", version: 2 } }))).toThrow(/version 2/);
+    expect(() => parseSyncBlob(blob({ players: [] }))).toThrow(/No players/);
   });
 });

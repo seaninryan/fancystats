@@ -26,6 +26,7 @@ export function seasonView(data, seasonId) {
     appearances: pick(data.appearances, inSeason),
     adjustments: pick(data.adjustments, inSeason),
     absences: pick(data.absences, inSeason),
+    site: data.site?.[sid] ?? null,
   };
 }
 

@@ -16,6 +16,17 @@ const numOrNull = (v) => {
 };
 
 // Pure: validate + normalize a pasted capture. Throws user-facing messages.
+// One capture row -> the shape every import path uses.
+function normalizePlayerRow(p) {
+  return {
+    name: String(p.name).trim(),
+    clubId: p.clubId != null ? String(p.clubId) : null,
+    gamePosition: POSITIONS.includes(p.position) ? p.position : null,
+    price: numOrNull(p.price),
+    sitePoints: numOrNull(p.sitePoints),
+  };
+}
+
 export function parseFantasyBlob(text) {
   let blob;
   try {
@@ -26,15 +37,38 @@ export function parseFantasyBlob(text) {
   if (blob?.meta?.source !== "fantasyloi") throw new Error("That's not a Fantasy LOI capture.");
   const players = (Array.isArray(blob.players) ? blob.players : [])
     .filter((p) => p && String(p.name || "").trim())
-    .map((p) => ({
-      name: String(p.name).trim(),
-      clubId: p.clubId != null ? String(p.clubId) : null,
-      gamePosition: POSITIONS.includes(p.position) ? p.position : null,
-      price: numOrNull(p.price),
-      sitePoints: numOrNull(p.sitePoints),
-    }));
+    .map(normalizePlayerRow);
   if (!players.length) throw new Error("No players in the capture — are you logged in on the fantasy site?");
   return { clubs: Array.isArray(blob.meta.clubs) ? blob.meta.clubs : [], players };
+}
+
+// Pure: validate + normalize a Fantasy sync file (buildSyncSnippet's download).
+// history/myTeam are raw site facts and pass through untouched; mapping them onto
+// our matches happens at render time (sitePoints.js).
+export function parseSyncBlob(text) {
+  let blob;
+  try {
+    blob = typeof text === "string" ? JSON.parse(text) : text;
+  } catch {
+    throw new Error("Couldn't read that file — load the fancystats-sync JSON the snippet downloaded.");
+  }
+  if (blob?.meta?.source !== "fantasyloi-sync") throw new Error("That's not a Fantasy sync file.");
+  if (blob.meta.version !== 1) {
+    throw new Error(`Unsupported sync file version ${blob.meta.version} — copy the snippet again and re-run it.`);
+  }
+  const players = (Array.isArray(blob.players) ? blob.players : [])
+    .filter((p) => p && String(p.name || "").trim())
+    .map((p) => ({ ...normalizePlayerRow(p), siteId: numOrNull(p.siteId) }));
+  if (!players.length) throw new Error("No players in the file — are you logged in on the fantasy site?");
+  const obj = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
+  return {
+    capturedAt: numOrNull(blob.meta.capturedAt),
+    siteTeamId: numOrNull(blob.meta.siteTeamId),
+    clubs: Array.isArray(blob.meta.clubs) ? blob.meta.clubs : [],
+    players,
+    history: obj(blob.history),
+    myTeam: obj(blob.myTeam),
+  };
 }
 
 // Pure: fantasy club id -> our SofaScore team id. Auto-resolves by normalized name,
