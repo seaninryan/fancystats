@@ -16,8 +16,8 @@ const playedIn = (rows) => (rows || []).find((r) => r[0] === "Appearance")?.[1] 
 // -> { byKey: Map<"eventId:playerId", {total, rows, notInGame?}>, unresolved: [{playerId, siteId, gw, total, reason}] }
 // A block maps to the match whose OPPONENT is one of the block's two crests (crest order isn't
 // home/away, and his own crest may be his current club). A played block beats "Didn't Play", and
-// the first played block wins. Weeks he has no block for (up to the capture's latest gameweek)
-// become { total: 0, rows: [], notInGame: true }: he wasn't in the fantasy game yet.
+// the first played block wins. Rounds before his first site gameweek (for matches kicked off before
+// the capture; never from an empty history) become { total: 0, rows: [], notInGame: true }.
 // reason: "no-match" (no single match that round against that opponent for the player's team) |
 //         "no-appearance" (the match exists, the site says he played, SofaScore has no appearance)
 export function siteIndex(view) {
@@ -44,10 +44,6 @@ export function siteIndex(view) {
   }
   const bySite = new Map();
   for (const [pid, p] of Object.entries(view.players)) if (p.siteId != null) bySite.set(Number(p.siteId), pid);
-
-  // Latest gameweek the capture covers: weeks after it simply haven't been scored yet.
-  let latestGw = 0;
-  for (const blocks of Object.values(site.history)) for (const b of blocks) if (Number(b[0]) > latestGw) latestGw = Number(b[0]);
 
   for (const [siteKey, blocks] of Object.entries(site.history)) {
     const pid = bySite.get(Number(siteKey));
@@ -85,16 +81,20 @@ export function siteIndex(view) {
       taken.set(key, played);
       out.byKey.set(key, { total: Number(total), rows });
     }
-    // Weeks the site has no block for at all: he wasn't in the fantasy game that week
-    // (e.g. registered later), so the site scored him 0 — up to the latest captured gameweek.
-    const siteGws = new Set(blocks.map((b) => Number(b[0])));
-    for (const a of apps.values()) {
-      const m = view.matches[a.eventId];
-      if (!m?.importedAt || !m.goalTimes) continue;
-      const r = matchRound(m);
-      const key = `${a.eventId}:${pid}`;
-      if (r != null && r <= latestGw && !siteGws.has(Number(r)) && !out.byKey.has(key)) {
-        out.byKey.set(key, { total: 0, rows: [], notInGame: true });
+    // Weeks before his first site gameweek: he wasn't in the fantasy game yet, so the site
+    // scored him 0. Only for matches kicked off before the capture, and never from an empty
+    // history (a page that failed to load proves nothing).
+    if (blocks.length) {
+      const firstGw = Math.min(...blocks.map((b) => Number(b[0])));
+      for (const a of apps.values()) {
+        const m = view.matches[a.eventId];
+        if (!m?.importedAt || !m.goalTimes) continue;
+        const r = matchRound(m);
+        const key = `${a.eventId}:${pid}`;
+        const beforeCapture = site.capturedAt == null || m.kickoff == null || m.kickoff < site.capturedAt;
+        if (r != null && r < firstGw && beforeCapture && !out.byKey.has(key)) {
+          out.byKey.set(key, { total: 0, rows: [], notInGame: true });
+        }
       }
     }
   }

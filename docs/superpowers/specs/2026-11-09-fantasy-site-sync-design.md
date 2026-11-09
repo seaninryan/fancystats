@@ -125,11 +125,13 @@ Resolution, for every player with a `siteId` and every site block:
    one for the same key, and the first played block wins over a later one. If there's no
    appearance: a block where he played → `unresolved` (`no-appearance`); a "Didn't Play" block
    → ignored. A "Didn't Play" block with no candidate match is also ignored.
-4. **Weeks with no site block.** For an appearance in a round up to the latest gameweek in the
-   capture, where the player has a site history but no block at all with that gw, the site
-   scored him 0 (he wasn't in the fantasy game that week, e.g. registered later): `byKey`
-   gets `{ total: 0, rows: [], notInGame: true }`. (Validated on 2026 data: Alfie Bates played
-   SofaScore rounds 25–27, but the site's records start at GW28.)
+4. **Rounds before his first site gameweek.** For an appearance in a round before the player's
+   first site gameweek, in a match kicked off before the capture, the site scored him 0 (he
+   wasn't in the fantasy game yet, e.g. registered later): `byKey` gets
+   `{ total: 0, rows: [], notInGame: true }`. Never derived from an empty history (a page that
+   failed to load proves nothing); gaps after his first site gameweek keep our estimate.
+   (Validated on 2026 data: Alfie Bates played SofaScore rounds 25–27, but the site's records
+   start at GW28.)
 
 Because this runs on `matchRound`, correcting a round override (for example GW32 Galway v
 Shelbourne) immediately reconnects the site points.

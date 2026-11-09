@@ -74,14 +74,27 @@ describe("siteIndex + appearancePoints", () => {
     const v = view(sync(base(), { "501": [[2, "c1", "c3", 7, played], [2, "c3", "c1", 5, played]] }));
     expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
   });
-  it("weeks the site has no block for score 0, up to the latest captured gameweek", () => {
-    let v = view(sync(base(), { "501": [[2, "c3", "c1", 7, played]] }));
+  it("weeks before his first site gameweek score 0 (he wasn't in the game yet)", () => {
+    const v = view(sync(base(), { "501": [[2, "c3", "c1", 7, played]] }));
     const r = appearancePoints(v, v.appearances["100:10"]);
     expect(r).toMatchObject({ total: 0, source: "site" });
     expect(r.site.notInGame).toBe(true);
     expect(appearancePoints(v, v.appearances["101:10"]).total).toBe(7);
-    v = view(sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] }));
+  });
+  it("a gap after his first site gameweek keeps our estimate (mid-gameweek capture)", () => {
+    const v = view(sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST], [3, "c1", "c2", 3, played]] }));
+    expect(appearancePoints(v, v.appearances["101:10"])).toMatchObject({ source: "ours", total: 4 });
+  });
+  it("an empty history never zeroes anything", () => {
+    const v = view(sync(base(), { "501": [] }));
+    expect(appearancePoints(v, v.appearances["100:10"]).source).toBe("ours");
     expect(appearancePoints(v, v.appearances["101:10"]).source).toBe("ours");
+  });
+  it("a match kicked off after the capture keeps our estimate", () => {
+    const d = applySiteSync(base(), { capturedAt: NOW - 1e9, siteTeamId: 7378, clubs: CLUBS, players: [], history: { "501": [[2, "c3", "c1", 7, played]] }, myTeam: {} },
+      [{ playerId: "10", siteId: 501 }], NOW);
+    const v = view(d);
+    expect(appearancePoints(v, v.appearances["100:10"]).source).toBe("ours");
   });
   it("splits a double gameweek by the clubs in each block", () => {
     let d = imp(base(), match(102, 1, 1, 3, 0, 0), [app(102, 10, 1)]);
