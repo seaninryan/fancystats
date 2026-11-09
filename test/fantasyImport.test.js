@@ -99,6 +99,11 @@ describe("withTeamIds", () => {
 
 describe("buildSyncSnippet", () => {
   const snip = buildSyncSnippet({ siteTeamId: 7378 });
+  it("captures your leagues, private standings for every period and opponents' teams", () => {
+    for (const s of ['load("/Leagues")', "leagueCode=", "&period=", "yourLeagues", "opponents", "#details", "me: { details: myDetails }"]) {
+      expect(snip).toContain(s);
+    }
+  });
   it("skips a player page the site keeps failing on, but only a few", () => {
     expect(snip).toContain("failed.push(id)");
     expect(snip).toContain("failed.length > 5");

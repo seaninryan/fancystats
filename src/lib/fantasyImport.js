@@ -198,25 +198,89 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
       const m = (el.getAttribute("onclick") || "").match(/playerScore\\('(\\d+)',\\s*'(.*)',\\s*'(-?\\d+)'\\)/);
       return m && { id: Number(m[1]), name: m[2], pts: Number(m[3]), captain: el.textContent.includes("(c)") };
     };
-    const myTeam = {}, squadIds = new Map();
-    for (const gw of gws) {
-      const doc = gw === 1 ? first : await load("/Results?teamId=" + TEAM + "&gameweek=" + gw);
-      if (gw !== 1 && !doc.querySelector("select option")) throw new Error("couldn't read your Results page for GW " + gw + " — session expired? log in and re-run");
+    const parseTeam = (doc) => {
       const pitch = doc.querySelector(".pitch");
-      if (!pitch) continue;
+      if (!pitch) return null;
       const lines = [...pitch.children].map((row) => [...row.querySelectorAll("[onclick^=playerScore]")].map(card).filter(Boolean)).filter((l) => l.length);
       const bench = [...doc.querySelectorAll("[onclick^=playerScore]")].filter((el) => !pitch.contains(el)).map(card).filter(Boolean);
       const all = lines.flat().concat(bench);
-      if (!all.length) continue;
+      if (!all.length) return null;
       const h = [...doc.querySelectorAll("h2")].find((x) => /Points/.test(x.textContent));
       const g = { lines: lines.map((l) => l.map((x) => x.id)), bench: bench.map((x) => x.id),
         captain: (all.find((x) => x.captain) || {}).id || null, shown: {}, names: {}, total: h ? num(h.textContent) : null };
-      for (const x of all) { g.shown[x.id] = x.pts; g.names[x.id] = x.name; ids.add(x.id); squadIds.set(x.name, x.id); }
-      myTeam[gw] = g;
-      say("your team — GW " + gw + ": " + (g.total == null ? "?" : g.total) + " pts");
+      for (const x of all) { g.shown[x.id] = x.pts; g.names[x.id] = x.name; }
+      return { g, all };
+    };
+    // Team Details modal: <label><strong>Key: </strong>value</label>
+    const details = (doc) => {
+      const out = {};
+      const box = doc.querySelector("#details");
+      if (box) for (const l of box.querySelectorAll("label")) {
+        const k = txt(l.querySelector("strong"));
+        if (k) out[k.replace(/:$/, "")] = txt(l).slice(k.length).trim();
+      }
+      return out;
+    };
+    const myTeam = {}, squadIds = new Map();
+    let myDetails = {};
+    for (const gw of gws) {
+      const doc = gw === 1 ? first : await load("/Results?teamId=" + TEAM + "&gameweek=" + gw);
+      if (gw !== 1 && !doc.querySelector("select option")) throw new Error("couldn't read your Results page for GW " + gw + " — session expired? log in and re-run");
+      const t = parseTeam(doc);
+      if (!t) continue;
+      for (const x of t.all) { ids.add(x.id); squadIds.set(x.name, x.id); }
+      myTeam[gw] = t.g;
+      myDetails = details(doc);
+      say("your team — GW " + gw + ": " + (t.g.total == null ? "?" : t.g.total) + " pts");
     }
     // squad players aren't on Transfers: join them to their Player Stats row by name
     for (const row of rows.values()) if (row.siteId == null && squadIds.has(row.name)) row.siteId = squadIds.get(row.name);
+    // 5. your leagues: positions everywhere; full standings and opponents' latest teams for private ones
+    const lp = await load("/Leagues");
+    const globalCodes = new Set(), yourLeagues = [];
+    const codeOf = (a) => { try { return new URL(a.getAttribute("href"), location.href).searchParams.get("leagueCode"); } catch (e) { return null; } };
+    for (const t of lp.querySelectorAll("table")) {
+      const head = [...t.querySelectorAll("th")].map(txt);
+      for (const tr of t.querySelectorAll("tr")) {
+        const a = tr.querySelector("a[href*=leagueCode]");
+        const code = a ? codeOf(a) : null;
+        if (!code) continue;
+        if (head[0] === "League") yourLeagues.push({ code: code, name: txt(tr.cells[0]), position: num(txt(tr.cells[1])) });
+        else if (!head.length) globalCodes.add(code);
+      }
+    }
+    if (!yourLeagues.length) throw new Error("couldn't read your Leagues page — log in and re-run");
+    for (const l of yourLeagues) l.private = !globalCodes.has(l.code) && l.code !== "Overall";
+    const leagues = {}, rivals = new Map();
+    for (const l of yourLeagues.filter((x) => x.private)) {
+      const lg = { name: l.name, periods: {} };
+      for (const p of ["Overall"].concat(gws)) {
+        const doc = await load("/Leagues?leagueCode=" + encodeURIComponent(l.code) + "&period=" + p);
+        const table = [...doc.querySelectorAll("table")].find((t) => txt(t.querySelector("th")) === "#");
+        if (!table) throw new Error("couldn't read league " + l.name + " (" + p + ") — log in and re-run");
+        lg.periods[p] = [...table.querySelectorAll("tr")].map((tr) => {
+          const a = tr.querySelector("a[href*=teamId]");
+          const m = a ? (a.getAttribute("href").match(/teamId=([0-9]+)/) || []) : [];
+          const id = m[1] ? Number(m[1]) : null;
+          if (id && id !== TEAM) rivals.set(id, txt(a));
+          return [num(txt(tr.cells[0])), id, a ? txt(a) : "", num(txt(tr.cells[2]))];
+        }).filter((r) => r[1]);
+      }
+      leagues[l.code] = lg;
+      say("league " + l.name + ": " + lg.periods.Overall.length + " managers");
+    }
+    const opponents = {};
+    const myGws = Object.keys(myTeam).map(Number);
+    if (myGws.length) {
+      const latest = Math.max.apply(null, myGws);
+      for (const [tid, manager] of rivals) {
+        const doc = await load("/Results?teamId=" + tid + "&gameweek=" + latest);
+        const t = parseTeam(doc);
+        opponents[tid] = { manager: manager, gw: latest, team: t ? t.g : null, details: details(doc) };
+        if (t) for (const x of t.all) ids.add(x.id);
+      }
+      say("opponents' teams: " + rivals.size);
+    }
     // 4. every player's season, gameweek by gameweek
     const history = {}, failed = [];
     const totalOf = new Map([...rows.values()].filter((x) => x.siteId != null).map((x) => [x.siteId, x.sitePoints]));
@@ -246,13 +310,14 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
       if (++n % 25 === 0) say("history: " + n + "/" + ids.size);
     }
     const blob = { meta: { source: "fantasyloi-sync", version: 1, capturedAt: Date.now(), siteTeamId: TEAM, clubs: clubs, failed: failed },
-      players: [...rows.values()], history: history, myTeam: myTeam };
+      players: [...rows.values()], history: history, myTeam: myTeam,
+      yourLeagues: yourLeagues, leagues: leagues, opponents: opponents, me: { details: myDetails } };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(blob)], { type: "application/json" }));
     a.download = "fancystats-sync-" + new Date().toISOString().slice(0, 10) + ".json";
     document.body.appendChild(a); a.click(); a.remove();
     say("done — " + blob.players.length + " players, " + ids.size + " histories, " + Object.keys(myTeam).length +
-      " gameweeks of your team" + (failed.length ? ", " + failed.length + " player page(s) skipped" : "") + ". Load the downloaded file in fancystats → ⚙ → Fantasy sync.", "lime");
+      " gameweeks of your team, " + Object.keys(leagues).length + " leagues" + (failed.length ? ", " + failed.length + " player page(s) skipped" : "") + ". Load the downloaded file in fancystats → ⚙ → Fantasy sync.", "lime");
   } catch (e) {
     say(e.message + " — nothing captured, re-run from the start.", "red");
   }
