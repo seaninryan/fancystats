@@ -114,15 +114,22 @@ site points simply don't apply to it). Club ids map to teams through the existin
   exists, the site says he played, SofaScore has no appearance).
 
 Resolution, for every player with a `siteId` and every site block:
-1. Candidates: imported matches with `matchRound(m) === gw` that involve the player's team.
-   The player's team is the `teamId` on his appearances in that round; failing that, any team
-   in the block's two clubs that the player has appeared for this season.
-2. One candidate → it. Two (double GW) → the one whose two teams both appear in the block's
-   clubs; still tied → unresolved.
+1. Candidates: imported matches with `matchRound(m) === gw` that involve the player's team
+   (the teams on his appearances this season, plus his current `teamId`) **and whose opponent
+   is one of the block's two clubs**. The opponent crest is reliable even when the player's
+   own crest shows his current club; when either crest can't be mapped to a team, skip this
+   check. Prefer candidates where he has an appearance.
+2. Exactly one candidate → it; otherwise → `unresolved` (`no-match`) if he played.
 3. Key `eventId:playerId`. If an appearance exists → `byKey` (a "Didn't Play" block goes in
-   with total 0, so the site's "didn't play" wins too). If not: a block where he played →
-   `unresolved` (`no-appearance`); a "Didn't Play" block → ignored. A "Didn't Play" block
-   with no candidate match is also ignored, never `no-match`.
+   with total 0, so the site's "didn't play" wins too). A played block beats a "Didn't Play"
+   one for the same key, and the first played block wins over a later one. If there's no
+   appearance: a block where he played → `unresolved` (`no-appearance`); a "Didn't Play" block
+   → ignored. A "Didn't Play" block with no candidate match is also ignored.
+4. **Weeks with no site block.** For an appearance in a round up to the latest gameweek in the
+   capture, where the player has a site history but no block at all with that gw, the site
+   scored him 0 (he wasn't in the fantasy game that week, e.g. registered later): `byKey`
+   gets `{ total: 0, rows: [], notInGame: true }`. (Validated on 2026 data: Alfie Bates played
+   SofaScore rounds 25–27, but the site's records start at GW28.)
 
 Because this runs on `matchRound`, correcting a round override (for example GW32 Galway v
 Shelbourne) immediately reconnects the site points.
