@@ -5,6 +5,7 @@ import { seasonView } from "./lib/seasons.js";
 import SeasonBar, { SeasonBanner } from "./components/SeasonBar.jsx";
 import MatchesTab from "./components/MatchesTab.jsx";
 import PlayersTab from "./components/PlayersTab.jsx";
+import MyTeamTab from "./components/MyTeamTab.jsx";
 import TeamsTab from "./components/TeamsTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import TableTab from "./components/TableTab.jsx";
@@ -14,6 +15,7 @@ const TABS = [
   ["matches", "Matches", MatchesTab],
   ["table", "Table", TableTab],
   ["players", "Players", PlayersTab],
+  ["myteam", "My Team", MyTeamTab],
   ["teams", "Teams", TeamsTab],
   ["settings", "⚙", SettingsTab],
 ];

@@ -17,7 +17,7 @@ export default function GameweekChart({ series, cumulative, onToggleCumulative, 
       <div className="row" style={{ marginBottom: 4 }}>
         {children}
         <button className={cumulative ? "primary" : ""} onClick={onToggleCumulative}>Cumulative</button>
-        <button onClick={onClear} style={{ marginLeft: "auto" }}>Clear</button>
+        {onClear && <button onClick={onClear} style={{ marginLeft: "auto" }}>Clear</button>}
       </div>
       <ResponsiveContainer width="100%" height={260}>
         <LineChart data={rows} margin={{ top: 8, right: 16, bottom: 0, left: 0 }}>
