@@ -15,11 +15,7 @@ export function myTeamGameweeks(view) {
   return Object.keys(view.site?.myTeam || {}).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
 }
 
-// -> { gw, total, lines: [{label, players}], bench } | null; entries are
-// { siteId, playerId|null, name, points, captain }. Lines are the site's own pitch rows.
-export function myTeamGameweek(view, gw) {
-  const g = view.site?.myTeam?.[gw];
-  if (!g) return null;
+export function teamLines(view, g) {
   const ids = bySiteId(view.players);
   const entry = (sid) => {
     const playerId = ids.get(Number(sid)) ?? null;
@@ -33,11 +29,17 @@ export function myTeamGameweek(view, gw) {
   };
   const lines = g.lines || [];
   return {
-    gw: Number(gw),
     total: g.total ?? null,
     lines: lines.map((l, i) => ({ label: lines.length === LINE_LABELS.length ? LINE_LABELS[i] : "XI", players: l.map(entry) })),
     bench: (g.bench || []).map(entry),
   };
+}
+
+// -> { gw, total, lines: [{label, players}], bench } | null; entries are
+// { siteId, playerId|null, name, points, captain }. Lines are the site's own pitch rows.
+export function myTeamGameweek(view, gw) {
+  const g = view.site?.myTeam?.[gw];
+  return g ? { gw: Number(gw), ...teamLines(view, g) } : null;
 }
 
 export function myTeamSeries(view) {
