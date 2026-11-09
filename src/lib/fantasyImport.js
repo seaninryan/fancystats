@@ -120,7 +120,7 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
   if (!location.hostname.endsWith(HOST)) return say("run this on a " + HOST + " tab.", "red");
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const txt = (e) => (e ? e.textContent : "").replace(/\\s+/g, " ").trim();
-  const num = (s) => { const m = String(s == null ? "" : s).match(/-?\\d+(?:\\.\\d+)?/); return m ? parseFloat(m[0]) : null; };
+  const num = (s) => { const m = String(s == null ? "" : s).replace(/,/g, "").match(/-?\\d+(?:\\.\\d+)?/); return m ? parseFloat(m[0]) : null; };
   const path = (src) => { try { return new URL(src, location.href).pathname; } catch (e) { return src || ""; } };
   const load = async (url, init) => {
     for (let attempt = 0; ; attempt++) {
@@ -256,9 +256,11 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
     if (!yourLeagues.length) throw new Error("couldn't read your Leagues page — log in and re-run");
     for (const l of yourLeagues) l.private = !globalCodes.has(l.code) && l.code !== "Overall";
     const leagues = {}, rivals = new Map();
+    // only gameweeks already played (your team has a result): later periods are empty or all zeros
+    const lastPlayed = Math.max.apply(null, [0].concat(Object.keys(myTeam).map(Number)));
     for (const l of yourLeagues.filter((x) => x.private)) {
       const lg = { name: l.name, periods: {} };
-      for (const p of ["Overall"].concat(gws)) {
+      for (const p of ["Overall"].concat(gws.filter((g) => g <= lastPlayed))) {
         const doc = await load("/Leagues?leagueCode=" + encodeURIComponent(l.code) + "&period=" + p);
         const table = [...doc.querySelectorAll("table")].find((t) => txt(t.querySelector("th")) === "#");
         if (!table) throw new Error("couldn't read league " + l.name + " (" + p + ") — log in and re-run");
@@ -279,6 +281,7 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
       const latest = Math.max.apply(null, myGws);
       for (const [tid, manager] of rivals) {
         const doc = await load("/Results?teamId=" + tid + "&gameweek=" + latest);
+        if (!doc.querySelector("select option")) throw new Error("couldn't read " + manager + "'s team — session expired? log in and re-run");
         const t = parseTeam(doc);
         opponents[tid] = { manager: manager, gw: latest, team: t ? t.g : null, details: details(doc) };
         if (t) for (const x of t.all) ids.add(x.id);

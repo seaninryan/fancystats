@@ -47,6 +47,10 @@ describe("LeaguesTab SSR", () => {
     const d = emptyData();
     expect(renderToStaticMarkup(<LeaguesTab data={seasonView(d, d.meta.seasonId)} openPlayer={() => {}} />)).toContain("Fantasy sync");
   });
+  it("says so when the sync found no private leagues", () => {
+    const v = view({ yourLeagues: [{ code: "Overall", name: "Overall League", position: 50, private: false }], leagues: {} });
+    expect(renderToStaticMarkup(<LeaguesTab data={v} openPlayer={() => {}} />)).toContain("No private leagues");
+  });
   it("shows the first private league's standings and race", () => {
     const html = renderToStaticMarkup(<LeaguesTab data={view()} openPlayer={() => {}} />);
     expect(html).toContain("Mini");

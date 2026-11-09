@@ -109,6 +109,11 @@ describe("buildSyncSnippet", () => {
     expect(snip).toContain("failed.length > 5");
     expect(snip).toContain("failed: failed");
   });
+  it("reads 1,234-style numbers, fetches only played gameweeks' standings and checks opponents' pages", () => {
+    expect(snip).toContain('.replace(/,/g, "")');
+    expect(snip).toContain("gws.filter((g) => g <= lastPlayed)");
+    expect(snip).toContain("couldn't read \" + manager + \"'s team");
+  });
   it("is valid JavaScript", () => {
     expect(() => new Function(snip)).not.toThrow();
   });

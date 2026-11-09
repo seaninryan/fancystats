@@ -13,7 +13,9 @@ export default function LeaguesTab({ data, openPlayer }) {
   const [rival, setRival] = useState(null);
   const [cumulative, setCumulative] = useState(true);
   if (!leagues.length) {
-    return <p className="dim">No league data yet — run the Fantasy sync on the ⚙ Settings tab.</p>;
+    return (data.site?.yourLeagues || []).length
+      ? <p className="dim">No private leagues in your last Fantasy sync — join or create one on the fantasy site, then sync again.</p>
+      : <p className="dim">No league data yet — run the Fantasy sync on the ⚙ Settings tab.</p>;
   }
   const code = leagues.some((l) => l.code === picked) ? picked : leagues[0].code;
   const rows = leagueStandings(data, code);
@@ -48,6 +50,9 @@ export default function LeaguesTab({ data, openPlayer }) {
         </table>
         <p className="dim" style={{ margin: "6px 0 0" }}>Click a manager to compare their team with yours.</p>
       </div>
+      {rival != null && !opp && (
+        <p className="dim">{rows.find((r) => r.teamId === rival)?.manager ?? "This manager"}&rsquo;s team wasn&rsquo;t captured — run the Fantasy sync again.</p>
+      )}
       {opp && (
         <div>
           <h3>{opp.manager}{opp.details["Team Name"] ? ` — ${opp.details["Team Name"]}` : ""} <span className="dim">GW {opp.gw}: {opp.total ?? "—"} pts</span></h3>
@@ -56,7 +61,7 @@ export default function LeaguesTab({ data, openPlayer }) {
               .filter((k) => opp.details[k] != null).map((k) => `${k.replace(" Used", "")}: ${opp.details[k]}`).join(" · ")}
           </p>
           <TeamLines team={opp} openPlayer={openPlayer}
-            badge={(e) => (cmp?.shared.has(e.siteId) ? <span title="you have him too">🔵</span> : <span title="differential — you don't have him">◆</span>)} />
+            badge={cmp && ((e) => (cmp.shared.has(e.siteId) ? <span title="you have him too">🔵</span> : <span title="differential — you don't have him">◆</span>))} />
           {cmp && cmp.mineOnly.length > 0 && (
             <p><strong>You have, they don&rsquo;t:</strong> {cmp.mineOnly.map((e) => e.name).join(", ")}</p>
           )}
