@@ -1444,10 +1444,23 @@ describe("applySiteSync", () => {
     const d = applySiteSync(importedFixture(), parsed(), rows, NOW);
     expect(d.site[d.meta.seasonId]).toEqual({
       capturedAt: NOW, siteTeamId: 7378, clubs: parsed().clubs, history: parsed().history, myTeam: parsed().myTeam,
+      yourLeagues: [], leagues: {}, opponents: {}, me: {},
     });
     expect(d.players["10"].siteId).toBe(501);
     expect(d.players["10"].price).toBe(7.5);
   });
+  it("stores league data with the site season", () => {
+    const d = applySiteSync(importedFixture(), parsed({
+      yourLeagues: [{ code: "abc", name: "Mini", position: 1, private: true }],
+      leagues: { abc: { name: "Mini", periods: {} } }, opponents: { "9": { manager: "X" } }, me: { details: { a: "b" } },
+    }), rows, NOW);
+    const s = d.site[d.meta.seasonId];
+    expect(s.yourLeagues[0].name).toBe("Mini");
+    expect(s.leagues.abc.name).toBe("Mini");
+    expect(s.opponents["9"].manager).toBe("X");
+    expect(s.me.details.a).toBe("b");
+  });
+
   it("a created fantasy-only player gets its siteId and the inSquad sync", () => {
     const row = { name: "New Guy", teamId: 1, clubId: "c1", gamePosition: "MID", price: 4.5, sitePoints: 0, siteId: 503 };
     const d = applySiteSync(importedFixture(), parsed(), rows, NOW, [row]);

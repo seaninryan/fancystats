@@ -188,6 +188,24 @@ describe("parseSyncBlob", () => {
     ...over,
   });
 
+  it("carries leagues, opponents and your Team Details, defaulting when absent (older files)", () => {
+    const r = parseSyncBlob(blob({
+      yourLeagues: [{ code: "abc", name: "Mini", position: 2, private: true }],
+      leagues: { abc: { name: "Mini", periods: { Overall: [[1, 9, "X", 50]] } } },
+      opponents: { "9": { manager: "X", gw: 1, team: null, details: {} } },
+      me: { details: { "Team Name": "Mine" } },
+    }));
+    expect(r.yourLeagues[0].code).toBe("abc");
+    expect(r.leagues.abc.periods.Overall[0][3]).toBe(50);
+    expect(r.opponents["9"].manager).toBe("X");
+    expect(r.me.details["Team Name"]).toBe("Mine");
+    const old = parseSyncBlob(blob());
+    expect(old.yourLeagues).toEqual([]);
+    expect(old.leagues).toEqual({});
+    expect(old.opponents).toEqual({});
+    expect(old.me).toEqual({});
+  });
+
   it("normalizes players like the price import and keeps siteId as a number", () => {
     const r = parseSyncBlob(blob());
     expect(r.players).toEqual([{ name: "Colm Whelan", clubId: "14420", gamePosition: "FWD", price: 6.5, sitePoints: 137, siteId: 501 }]);

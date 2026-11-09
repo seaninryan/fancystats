@@ -68,6 +68,10 @@ export function parseSyncBlob(text) {
     players,
     history: obj(blob.history),
     myTeam: obj(blob.myTeam),
+    yourLeagues: Array.isArray(blob.yourLeagues) ? blob.yourLeagues : [],
+    leagues: obj(blob.leagues),
+    opponents: obj(blob.opponents),
+    me: obj(blob.me),
     // player pages the site couldn't serve (persistent HTTP 500): no history for them
     failed: (Array.isArray(blob.meta.failed) ? blob.meta.failed : []).map(numOrNull).filter((x) => x != null),
   };

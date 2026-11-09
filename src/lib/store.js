@@ -288,6 +288,8 @@ export function applySiteSync(data, parsed, rows, now, created = []) {
     [next.meta.seasonId]: {
       capturedAt: parsed.capturedAt, siteTeamId: parsed.siteTeamId,
       clubs: parsed.clubs, history: parsed.history, myTeam: parsed.myTeam,
+      yourLeagues: parsed.yourLeagues ?? [], leagues: parsed.leagues ?? {},
+      opponents: parsed.opponents ?? {}, me: parsed.me ?? {},
     },
   };
   const gws = Object.keys(parsed.myTeam || {}).map(Number).filter(Number.isFinite);
