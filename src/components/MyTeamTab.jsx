@@ -1,19 +1,9 @@
 // src/components/MyTeamTab.jsx — your fantasy team per gameweek (from Fantasy sync).
 import { useState } from "react";
 import { myTeamGameweeks, myTeamGameweek, myTeamSeries } from "../lib/myTeam.js";
-import { PtsPill } from "./Pills.jsx";
+import { ordinal, leaguePositions } from "../lib/leagues.js";
+import TeamLines from "./TeamLines.jsx";
 import GameweekChart from "./GameweekChart.jsx";
-
-function Entry({ e, openPlayer }) {
-  const name = e.playerId
-    ? <span className="cell-click" style={{ textDecoration: "underline dotted" }} onClick={() => openPlayer(e.playerId)}>{e.name}</span>
-    : <span title="not linked to a SofaScore player">{e.name}</span>;
-  return (
-    <span className="chip" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
-      {name}{e.captain ? <strong> (c)</strong> : null}<PtsPill pts={e.points} />
-    </span>
-  );
-}
 
 export default function MyTeamTab({ data, openPlayer }) {
   const gws = myTeamGameweeks(data);
@@ -28,8 +18,12 @@ export default function MyTeamTab({ data, openPlayer }) {
     key: "me", label: "My team", color: "#0e7a3c",
     points: myTeamSeries(data).map((x) => ({ round: x.gw, value: x.total })),
   }];
+  const positions = leaguePositions(data);
   return (
     <div>
+      {positions.length > 0 && (
+        <p className="dim">{positions.map((p) => `${ordinal(p.position)} ${p.code === "Overall" ? "overall" : p.name}`).join(" · ")}</p>
+      )}
       <div className="card row">
         <label>Gameweek{" "}
           <select value={gw} onChange={(e) => setPicked(Number(e.target.value))}>
@@ -38,18 +32,7 @@ export default function MyTeamTab({ data, openPlayer }) {
         </label>
         <strong style={{ marginLeft: "auto" }}>{`${t.total ?? "—"} pts`}</strong>
       </div>
-      <div className="card">
-        {t.lines.map((l, i) => (
-          <div key={i} className="row" style={{ marginBottom: 6, flexWrap: "wrap" }}>
-            <span className="dim" style={{ width: "3rem" }}>{l.label}</span>
-            {l.players.map((e) => <Entry key={e.siteId} e={e} openPlayer={openPlayer} />)}
-          </div>
-        ))}
-        <div className="row" style={{ flexWrap: "wrap", borderTop: "1px solid var(--line)", paddingTop: 6 }}>
-          <span className="dim" style={{ width: "3rem" }}>Bench</span>
-          {t.bench.map((e) => <Entry key={e.siteId} e={e} openPlayer={openPlayer} />)}
-        </div>
-      </div>
+      <TeamLines team={t} openPlayer={openPlayer} />
       <GameweekChart series={series} cumulative={cumulative} onToggleCumulative={() => setCumulative(!cumulative)} />
     </div>
   );
