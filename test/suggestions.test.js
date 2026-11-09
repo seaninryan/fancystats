@@ -109,6 +109,10 @@ describe("suggestions", () => {
     d = markOut(d, "20", "", NOW);
     expect(buyTargets(suggestionContext(view(d), NOW)).map((o) => o.playerId)).toEqual(["30"]);
   });
+  it("a kickoff already past (stale, never imported) is not an upcoming fixture", () => {
+    const s = suggestionContext(view(withFixtures(played())), NOW + 2 * DAY);
+    expect(s.anyUpcoming).toBe(false);
+  });
   it("fixture runs: clubs with upcoming fixtures, easiest first", () => {
     expect(fixtureRuns(suggestionContext(view(played()), NOW))).toEqual([]);
     const runs = fixtureRuns(suggestionContext(view(withFixtures(played())), NOW));

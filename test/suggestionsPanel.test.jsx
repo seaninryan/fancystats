@@ -39,7 +39,7 @@ function played() {
 // Upcoming round 7: club 4 hosts club 1 (hard for 4, easy for 1), club 2 hosts club 3.
 function withFixtures(d) {
   return upsertMatchStubs(d, [
-    { eventId: 71, round: 7, kickoff: NOW + DAY, status: "notstarted", homeTeamId: 4, awayTeamId: 1 },
+    { eventId: 71, round: 7, kickoff: Date.now() + DAY, status: "notstarted", homeTeamId: 4, awayTeamId: 1 },
   ], TEAMS);
 }
 function squad(d, siteIds) {

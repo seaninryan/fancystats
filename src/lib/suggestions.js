@@ -11,6 +11,7 @@ export const FORM_WINDOW = 5;     // team matches, same window as the Teams page
 export const FIXTURE_COUNT = 3;   // upcoming fixtures that count
 export const FIXTURE_WEIGHT = 0.5; // a perfectly easy run lifts form by half
 
+const STALE_MS = 3 * 3600 * 1000; // same 3h grace as staleInfo
 const gone = (m) => m.status === "postponed" || m.status === "canceled";
 const mean = (xs) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : 0);
 
@@ -18,7 +19,8 @@ export function suggestionContext(view, now = Date.now()) {
   const ctx = fixtureContext(view);
   const upcoming = new Map(); // teamId (number) -> fixtures, soonest first
   const future = Object.values(view.matches)
-    .filter((m) => !m.importedAt && m.status !== "finished" && !gone(m))
+    // A kickoff more than STALE_MS ago is a result we haven't imported, not a fixture.
+    .filter((m) => !m.importedAt && m.status !== "finished" && !gone(m) && (m.kickoff ?? Infinity) > now - STALE_MS)
     .sort((a, b) => (a.kickoff || 0) - (b.kickoff || 0));
   for (const m of future) {
     const cmp = compareFixture(ctx, m);
@@ -39,10 +41,17 @@ export function suggestionContext(view, now = Date.now()) {
     view, now, upcoming, anyUpcoming: upcoming.size > 0,
     windows: teamWindowEventIds(view, FORM_WINDOW),
     apps: appearancesByPlayer(view),
+    outlooks: new Map(), // playerId -> outlook, filled on demand (filters re-rank, never recompute)
   };
 }
 
 export function playerOutlook(sctx, playerId) {
+  const key = String(playerId);
+  if (!sctx.outlooks.has(key)) sctx.outlooks.set(key, computeOutlook(sctx, playerId));
+  return sctx.outlooks.get(key);
+}
+
+function computeOutlook(sctx, playerId) {
   const { view, now } = sctx;
   const p = view.players[playerId];
   if (!p?.gamePosition || p.teamId == null) return null;
