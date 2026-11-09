@@ -203,3 +203,4 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 
 /* points from our scoring where the fantasy site has no value yet */
 .chip.est, .est { font-style: italic; opacity: 0.85; }
+tr.weak td { background: color-mix(in srgb, #d97706 12%, transparent); }

@@ -4,6 +4,7 @@ import { myTeamGameweeks, myTeamGameweek, myTeamSeries } from "../lib/myTeam.js"
 import { ordinal, leaguePositions } from "../lib/leagues.js";
 import TeamLines from "./TeamLines.jsx";
 import GameweekChart from "./GameweekChart.jsx";
+import SuggestionsPanel from "./SuggestionsPanel.jsx";
 
 export default function MyTeamTab({ data, openPlayer }) {
   const gws = myTeamGameweeks(data);
@@ -34,6 +35,7 @@ export default function MyTeamTab({ data, openPlayer }) {
       </div>
       <TeamLines team={t} openPlayer={openPlayer} />
       <GameweekChart series={series} cumulative={cumulative} onToggleCumulative={() => setCumulative(!cumulative)} />
+      <SuggestionsPanel data={data} openPlayer={openPlayer} />
     </div>
   );
 }
