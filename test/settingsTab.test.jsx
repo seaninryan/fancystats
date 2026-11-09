@@ -10,13 +10,13 @@ describe("SettingsTab SSR", () => {
   it("hosts both console imports and the legacy paste card", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
     expect(html).toContain("Import via console"); // SofaScore matches
-    expect(html).toContain("Import from Fantasy LOI"); // prices/positions/points
+    expect(html).toContain("Fantasy sync"); // prices/positions/points/site points/my team
     expect(html).toContain("Import from the fantasy game (paste)"); // legacy fallback
   });
   it("links out to both sites in a new tab, without leaking a referer", () => {
     const html = renderToStaticMarkup(<SettingsTab data={data()} update={() => {}} />);
     expect(html).toContain('href="https://www.sofascore.com/football/tournament/ireland/premier-division/192#id:87682"');
-    expect(html).toContain('href="https://fantasyloi.leagueofireland.ie/Stats/PlayerStats"');
+    expect(html).toContain('href="https://fantasyloi.leagueofireland.ie/"');
     // SofaScore blocks a github.io referer, so both links must suppress it
     expect(html.match(/rel="noreferrer"/g)).toHaveLength(2);
     expect(html.match(/target="_blank"/g)).toHaveLength(2);

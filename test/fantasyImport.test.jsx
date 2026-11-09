@@ -70,12 +70,19 @@ describe("UnmatchedLinks SSR", () => {
   });
 });
 
-describe("FantasyImport SSR", () => {
-  it("renders the snippet and the paste box", () => {
-    const html = renderToStaticMarkup(<FantasyImport data={dataWithPlayers()} update={() => {}} />);
-    expect(html).toContain("Import from Fantasy LOI");
-    expect(html).toContain("/Stats/PlayerStats");
+describe("FantasyImport (Fantasy sync) SSR", () => {
+  it("asks for the team id before offering the snippet", () => {
+    const d = dataWithPlayers();
+    const html = renderToStaticMarkup(<FantasyImport data={d} fullData={d} update={() => {}} />);
+    expect(html).toContain("Fantasy sync");
+    expect(html).toContain("team id");
+    expect(html).toContain("disabled");
+  });
+  it("offers the snippet and the file input once the team id is set", () => {
+    const d = { ...dataWithPlayers(), meta: { ...dataWithPlayers().meta, siteTeamId: 7378 } };
+    const html = renderToStaticMarkup(<FantasyImport data={d} fullData={d} update={() => {}} />);
     expect(html).toContain("Copy snippet");
+    expect(html).toContain('type="file"');
   });
 });
 

@@ -115,7 +115,7 @@ export default function SettingsTab({ data, fullData, update }) {
   return (
     <div>
       <ConsoleImport data={data} update={update} />
-      <FantasyImport data={data} update={update} />
+      <FantasyImport data={data} fullData={fullData} update={update} />
       <details className="card fold">
         <summary><h3>Import from the fantasy game (paste)</h3></summary>
         <p className="dim">

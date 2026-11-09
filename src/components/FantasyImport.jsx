@@ -1,13 +1,13 @@
-// src/components/FantasyImport.jsx
-import { useState } from "react";
-import { parseFantasyBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
+// src/components/FantasyImport.jsx — the Fantasy sync card (Settings).
+import { useMemo, useState } from "react";
+import { buildSyncSnippet, parseSyncBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
-import { applyFantasyRows, addFantasyOnlyPlayers } from "../lib/store.js";
+import { applySiteSync, addFantasyOnlyPlayers } from "../lib/store.js";
+import { seasonView } from "../lib/seasons.js";
+import { unresolvedSummary } from "../lib/sitePoints.js";
 import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
 import CopyButton from "./CopyButton.jsx";
 import Flash from "./Flash.jsx";
-
-const SNIPPET = ""; // replaced by the Fantasy sync card (Task 6)
 
 // Pre-select creation for the rows shouldCreateRow accepts; everything else keeps
 // the link-or-skip default. The rule itself lives in lib and is unit-tested there.
@@ -25,96 +25,137 @@ export function appliedMessage(players, newCount) {
   return `Applied ${players} players${newCount ? ` + ${newCount} new` : ""}`;
 }
 
-export default function FantasyImport({ data, update }) {
-  const [paste, setPaste] = useState("");
-  const [preview, setPreview] = useState(null); // { players, clubs, clubMap, matched, unmatched, links }
+const REASON_TEXT = {
+  "no-match": "no match in that round for their team — check the round of a postponed or rearranged match",
+  "no-appearance": "played on the site but SofaScore has no appearance (not counted)",
+};
+
+export default function FantasyImport({ data, fullData, update }) {
+  const [teamInput, setTeamInput] = useState(data.meta.siteTeamId ?? "");
+  const [preview, setPreview] = useState(null); // { parsed, clubMap, matched, unmatched, links }
   const [error, setError] = useState(null);
   const [flash, setFlash] = useState(null);
 
-  const buildPreview = (players, clubs, overrides) => {
-    const clubMap = mapClubs(clubs, data.teams, overrides);
-    const { matched, unmatched } = matchPlayers(withTeamIds(players, clubMap), data.players);
-    return { players, clubs, clubMap, matched, unmatched, links: defaultLinks(unmatched, data.players) };
+  const teamId = Number(data.meta.siteTeamId);
+  const snippet = useMemo(() => (teamId > 0 ? buildSyncSnippet({ siteTeamId: teamId }) : ""), [teamId]);
+
+  const saveTeam = () => {
+    const n = Number(teamInput);
+    if (Number.isInteger(n) && n > 0 && n !== data.meta.siteTeamId) {
+      update((d) => ({ ...d, meta: { ...d.meta, siteTeamId: n } }));
+    }
   };
 
-  const parse = () => {
+  const buildPreview = (parsed, overrides) => {
+    const clubMap = mapClubs(parsed.clubs, data.teams, overrides);
+    const { matched, unmatched } = matchPlayers(withTeamIds(parsed.players, clubMap), data.players);
+    return { parsed, clubMap, matched, unmatched, links: defaultLinks(unmatched, data.players) };
+  };
+
+  const loadFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-loading the same file
+    if (!file) return;
     setError(null); setFlash(null);
     try {
-      const { clubs, players } = parseFantasyBlob(paste);
-      setPreview(buildPreview(players, clubs, data.meta.fantasyClubMap));
-    } catch (e) {
-      setError(e.message);
+      setPreview(buildPreview(parseSyncBlob(await file.text()), data.meta.fantasyClubMap));
+    } catch (err) {
+      setError(err.message);
       setPreview(null);
     }
   };
 
-  // Binding a club re-runs matching immediately, so the unmatched list shrinks as
-  // you map. The map itself is user-owned and persists in the save.
-  const setClub = (clubId, teamId) => {
-    const overrides = { ...(data.meta.fantasyClubMap || {}), [clubId]: teamId };
+  const setClub = (clubId, tid) => {
+    const overrides = { ...(data.meta.fantasyClubMap || {}), [clubId]: tid };
     update((d) => ({ ...d, meta: { ...d.meta, fantasyClubMap: overrides } }));
-    if (preview) setPreview(buildPreview(preview.players, preview.clubs, overrides));
+    if (preview) setPreview(buildPreview(preview.parsed, overrides));
   };
+
+  const picks = preview ? preview.unmatched.map((u, i) => ({ u, pid: preview.links[i] })) : [];
+  const linked = picks.filter((x) => x.pid && x.pid !== NEW_PLAYER).map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
+  const created = picks.filter((x) => x.pid === NEW_PLAYER).map((x) => x.u);
+
+  // What the site data will look like once applied: a trial sync, projected like the app does.
+  const attention = useMemo(() => {
+    if (!preview) return [];
+    const trial = applySiteSync(fullData, preview.parsed, [...preview.matched, ...linked], 0);
+    return unresolvedSummary(seasonView(trial, trial.meta.seasonId));
+  }, [preview, fullData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const apply = () => {
-    const picks = preview.unmatched.map((u, i) => ({ u, pid: preview.links[i] }));
-    const linked = picks
-      .filter((x) => x.pid && x.pid !== NEW_PLAYER)
-      .map(({ u, pid }) => ({ ...u, playerId: pid, alias: u.name }));
-    const created = picks.filter((x) => x.pid === NEW_PLAYER).map((x) => x.u);
-    const now = Date.now(); // updaters stay pure — same convention as the paste card
+    const now = Date.now(); // updaters stay pure
+    const rows = [...preview.matched, ...linked];
     update((d) => {
-      const next = applyFantasyRows(d, [...preview.matched, ...linked], now);
+      const next = applySiteSync(d, preview.parsed, rows, now);
       return created.length ? addFantasyOnlyPlayers(next, created, now) : next;
     });
-    // counted before the preview is cleared — it's the only source for these numbers
-    setFlash(appliedMessage(preview.matched.length + linked.length, created.length));
+    const gws = Object.keys(preview.parsed.myTeam).length;
+    setFlash(`${appliedMessage(rows.length, created.length)} · ${gws} gameweek${gws === 1 ? "" : "s"} of your team`);
     setPreview(null);
-    setPaste("");
   };
 
-  const unresolved = preview ? preview.clubs.filter((c) => !preview.clubMap[String(c.id)]) : [];
-  const clubName = new Map((preview?.clubs || []).map((c) => [String(c.id), c.name]));
-  const picked = preview ? Object.values(preview.links).filter(Boolean) : [];
-  const linkCount = picked.filter((v) => v !== NEW_PLAYER).length;
-  const newCount = picked.filter((v) => v === NEW_PLAYER).length;
+  const unresolvedClubs = preview ? preview.parsed.clubs.filter((c) => !preview.clubMap[String(c.id)]) : [];
+  const clubName = new Map((preview?.parsed.clubs || []).map((c) => [String(c.id), c.name]));
+  const historyCount = preview ? Object.keys(preview.parsed.history).length : 0;
+  const teamGws = preview ? Object.keys(preview.parsed.myTeam).length : 0;
+  const linkCount = linked.length;
+  const newCount = created.length;
 
   return (
     <div className="card">
-      <h3>Import from Fantasy LOI</h3>
+      <h3>Fantasy sync</h3>
       <p className="dim">
-        Run this in a logged-in <code>fantasyloi.leagueofireland.ie</code> tab&rsquo;s DevTools console
-        (type <code>allow pasting</code> if prompted), then paste the result below. It captures every
-        player&rsquo;s position, price and site points in one go — no dropdowns to set, and your own
-        squad is included.
+        Brings in prices, positions, the site&rsquo;s points for every player and gameweek, and your
+        own team. Run the snippet in a logged-in <code>fantasyloi.leagueofireland.ie</code> tab&rsquo;s
+        DevTools console (type <code>allow pasting</code> if prompted). It takes about 2½ minutes and
+        downloads a file; load that file below.
       </p>
       <div className="row">
-        <CopyButton text={SNIPPET}>Copy snippet</CopyButton>
-        <a className="ext" href="https://fantasyloi.leagueofireland.ie/Stats/PlayerStats"
-          target="_blank" rel="noreferrer">Open Player Stats ↗</a>
+        <label>Your fantasy team id{" "}
+          <input value={teamInput} style={{ width: 90 }} inputMode="numeric"
+            onChange={(e) => setTeamInput(e.target.value)} onBlur={saveTeam} />
+        </label>
+        <span className="dim">the number in your Results page link (…teamId=<b>7378</b>)</span>
       </div>
-      <textarea readOnly value={SNIPPET} rows={6} style={{ width: "100%", fontFamily: "monospace", fontSize: 11 }} />
-      <textarea placeholder="Paste the snippet output here" value={paste} rows={4}
-        style={{ width: "100%", fontFamily: "monospace" }}
-        onChange={(e) => { setPaste(e.target.value); setPreview(null); setFlash(null); }} />
       <div className="row">
-        <button onClick={parse} disabled={!paste.trim()}>Parse</button>
-        {preview && (
-          <button className="primary" onClick={apply}
-            title={newCount ? `${newCount} player(s) the site lists but SofaScore has never seen will be added` : ""}>
-            Apply {preview.matched.length + linkCount} players{newCount ? ` + ${newCount} new` : ""}
-          </button>
-        )}
+        {snippet
+          ? <CopyButton text={snippet}>Copy snippet</CopyButton>
+          : <button disabled title="Enter your fantasy team id first">Copy snippet</button>}
+        <a className="ext" href="https://fantasyloi.leagueofireland.ie/" target="_blank" rel="noreferrer">Open the fantasy site ↗</a>
       </div>
+      {snippet && (
+        <div className="row">
+          <label>Load the downloaded file <input type="file" accept=".json,application/json" onChange={loadFile} /></label>
+        </div>
+      )}
       <Flash message={flash} onDone={() => setFlash(null)} />
       {error && <div className="banner err">{error}</div>}
       {preview && (
         <div style={{ marginTop: 8 }}>
-          <p>✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched{newCount ? ` · ${newCount} to add as new` : ""}</p>
-          {unresolved.length > 0 && (
+          <p>
+            ✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched
+            {newCount ? ` · ${newCount} to add as new` : ""} · {historyCount} player histories · {teamGws} gameweeks of your team
+          </p>
+          {attention.length > 0 && (
+            <div className="banner warn">
+              <strong>Site gameweeks needing attention</strong>
+              {attention.map((a) => (
+                <div key={`${a.gw}|${a.reason}`}>
+                  GW{a.gw}: {a.count} player-gameweek{a.count === 1 ? "" : "s"} — {REASON_TEXT[a.reason]}
+                  <span className="dim"> ({a.names.slice(0, 5).join(", ")}{a.names.length > 5 ? "…" : ""})</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="row">
+            <button className="primary" onClick={apply}>
+              Apply {preview.matched.length + linkCount} players{newCount ? ` + ${newCount} new` : ""}
+            </button>
+          </div>
+          {unresolvedClubs.length > 0 && (
             <div style={{ marginBottom: 8 }}>
               <p className="dim">Unrecognised clubs — bind them once and it&rsquo;s remembered:</p>
-              {unresolved.map((c) => (
+              {unresolvedClubs.map((c) => (
                 <div className="link-row" key={c.id}>
                   <span className="link-name">{c.name}</span>
                   <select className="link-pick" value=""
