@@ -52,9 +52,10 @@ apart (~2½ minutes), progress logged:
    fantasy club id map.
 2. **Ids:** `GET /Team/Transfers`; per row: site id (last cell), name, crest → club id.
 3. **My team:** read the GW options from `/Results?teamId=<t>&gameweek=1`, then fetch every
-   GW. Per GW: `xi` (11 site ids in page order), `bench` (4, in order), `captain` (site id
-   with the `(c)` marker), `shown` (siteId → shown points, captain already multiplied),
-   `total`. A GW page with no players is skipped. Squad players' site ids come from here.
+   GW. Per GW: `lines` (the site's pitch rows, each `.pitch > .row`, in order: GK, DEF, MID,
+   FWD, as arrays of site ids), `bench` (4, in order), `captain` (site id with the `(c)`
+   marker), `shown` (siteId → shown points, captain already multiplied), `names`
+   (siteId → name from the card), `total`. A GW page with no players is skipped. Squad players' site ids come from here.
 4. **History:** union of site ids from steps 2 and 3, then `ViewPlayer` for each. Per block:
    `[gw, clubIdA, clubIdB, total, rows]`, where each row is `[stat, value, points]` and
    clubs are resolved through the crest map (an unknown crest → null).
@@ -77,16 +78,17 @@ so there's no clipboard step. Blob:
   "players": [{ "name": "", "clubId": "", "position": "MID", "price": 6.5,
                 "sitePoints": 36, "siteId": 710952 }],
   "history": { "710952": [[1, "14420", "55388", 2, [["Appearance", "Started", 2]]]] },
-  "myTeam": { "35": { "xi": [59089], "bench": [716551], "captain": 213284,
-                      "shown": { "59089": 9 }, "total": 83 } }
+  "myTeam": { "35": { "lines": [[59089], [60709], [56548], [213284]], "bench": [716551],
+                      "captain": 213284, "shown": { "59089": 9 }, "names": { "59089": "Ed McGinty" },
+                      "total": 83 } }
 }
 ```
 
 ## Data model
 
 - **`data.site: { [seasonId]: SiteSeason }`**, import-owned and replaced wholesale on each
-  sync of that season. `SiteSeason = { capturedAt, siteTeamId, history, myTeam }`, with
-  `history` and `myTeam` stored exactly as in the blob (raw facts, keyed by site ids and GW).
+  sync of that season. `SiteSeason = { capturedAt, siteTeamId, clubs, history, myTeam }`,
+  with `clubs`, `history` and `myTeam` stored exactly as in the blob (raw facts, keyed by site ids and GW).
   The sync writes to `data.site[meta.seasonId]`.
 - **`player.siteId: number | null`**, a link set when the import matches a site row to our
   player, including manual links made through the unmatched list. It stays on re-imports;
@@ -100,6 +102,10 @@ so there's no clipboard step. Blob:
 Nothing derived is stored. Matching site gameweeks to our matches happens at render time.
 
 ## Site points: `src/lib/sitePoints.js`
+
+`siteIndex` and `appearancePoints` take a **season view** (raw data has no `view.site`, so
+site points simply don't apply to it). Club ids map to teams through the existing
+`mapClubs(site.clubs, teams, meta.fantasyClubMap)`.
 
 **`siteIndex(view)`**, memoised per view object with a `WeakMap`, returns:
 - `byKey: Map<"eventId:playerId", { total, rows }>`
@@ -127,6 +133,9 @@ Shelbourne) immediately reconnects the site points.
 - `site` = `siteIndex(view).byKey.get(key)` or null.
 - `source = "site"` and `total = site.total` when `site` exists, even without a
   `gamePosition`; else `"ours"` with `ours.total`; else `total: null`.
+- An explicit `{ position }` option (the mismatch what-ifs) always returns ours: the site has
+  no "what if he were a midfielder". `mismatchInfo` passes the game position explicitly too,
+  so both sides of its delta are our scoring.
 
 Every place that computes points switches to `appearancePoints`, so there is one rule:
 `playerTotals`, `hotEventIds`, `leagueTable`, `allMatchTeamPoints` (store.js), the fantasy
@@ -154,9 +163,10 @@ stays as a fallback):
    every matched row.
 2. `data.site[meta.seasonId] = { capturedAt, siteTeamId, history, myTeam }`.
 3. 🔵 sync: `inSquad = true` for our players whose `siteId` is in the latest captured GW's
-   `xi` + `bench`; `false` for everyone else.
+   `lines` + `bench`; `false` for everyone else.
 
-**Points source marker:** per-match points from our scoring, not the site, render in italics
+**Points source marker:** once the viewed season has site data, per-match points from our
+scoring, not the site, render in italics
 with `title="our estimate (site not captured yet)"`. PlayerDetail rows that have both and
 disagree show `site 8 · ours 5 (assists)`, naming the components that differ, using the
 site's stat rows and our breakdown.
@@ -164,14 +174,14 @@ site's stat rows and our breakdown.
 **My Team tab** (`src/components/MyTeamTab.jsx`, after Players):
 - Shown when `view.site?.myTeam` has GWs; otherwise a note pointing to Settings.
 - GW picker defaulting to the latest captured GW.
-- XI grouped GK / DEF / MID / FWD (by the player's `gamePosition`), each with shown points;
-  captain marked "(c)". Bench below, in order, with points. GW total.
+- XI in the site's own rows, labelled GK / DEF / MID / FWD, each with shown points; captain
+  marked "(c)". Bench below, in order, with points. GW total.
 - Season chart of your GW totals (recharts, like the existing charts).
 - Player names open PlayerDetail. Site ids with no linked player show the site name, unlinked.
 - Read-only in past-season view (no editing controls on this tab anyway).
 
 Derivations for the tab live in lib: `myTeamGameweek(view, gw)` →
-`{ gw, total, lines: { GK, DEF, MID, FWD }, bench, captainId }` with entries
+`{ gw, total, lines: [{ label, players }], bench }` with entries
 `{ siteId, playerId|null, name, points, captain }`, and `myTeamSeries(view)` →
 `[{ gw, total }]`.
 
