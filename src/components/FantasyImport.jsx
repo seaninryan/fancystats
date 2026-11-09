@@ -1,13 +1,13 @@
 // src/components/FantasyImport.jsx
 import { useState } from "react";
-import { buildFantasySnippet, parseFantasyBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
 import { applyFantasyRows, addFantasyOnlyPlayers } from "../lib/store.js";
 import UnmatchedLinks, { NEW_PLAYER } from "./UnmatchedLinks.jsx";
 import CopyButton from "./CopyButton.jsx";
 import Flash from "./Flash.jsx";
 
-const SNIPPET = buildFantasySnippet(); // no app state goes into it — build once
+const SNIPPET = ""; // replaced by the Fantasy sync card (Task 6)
 
 // Pre-select creation for the rows shouldCreateRow accepts; everything else keeps
 // the link-or-skip default. The rule itself lives in lib and is unit-tested there.

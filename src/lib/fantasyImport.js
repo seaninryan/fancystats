@@ -95,76 +95,146 @@ export function withTeamIds(players, clubMap) {
   return (players || []).map((p) => ({ ...p, teamId: (p.clubId && clubMap?.[p.clubId]) || null }));
 }
 
-// Returns the console snippet source. The user pastes it into a logged-in
-// fantasyloi.leagueofireland.ie tab's DevTools console. It replays the site's own
-// form POST 14 times: 10 clubs x Statistic=Value (price, club exact from the query,
-// and a crest -> club map as a side effect), then 4 positions x Statistic=Total
-// Score (points, position exact from the query, club via the crest map). The third
-// table column IS the statistic, so price and score can't come from one request.
-export function buildFantasySnippet() {
-  return `// fancystats fantasy import — run on a logged-in fantasyloi.leagueofireland.ie tab.
+// Returns the Fantasy sync console snippet. The user pastes it into a logged-in
+// fantasyloi.leagueofireland.ie tab (any page). ~340 read-only requests, 300ms
+// apart, one retry each (the site throws the odd HTTP 500), all-or-nothing:
+//   1. Player Stats (token + 14 POSTs): price, position, total for every player
+//   2. /Team/Transfers: site ids for players you don't own
+//   3. /Results for every gameweek: your XI rows, bench, captain, points (+ squad site ids)
+//   4. /ViewPlayer for every site id: each gameweek's points breakdown
+// It downloads fancystats-sync-YYYY-MM-DD.json for Settings → Fantasy sync.
+export function buildSyncSnippet({ siteTeamId } = {}) {
+  const team = Number(siteTeamId);
+  if (!Number.isInteger(team) || team <= 0) throw new Error("Set your fantasy team id first.");
+  return `// fancystats fantasy sync — run on a logged-in fantasyloi.leagueofireland.ie tab (any page).
 (async () => {
-  const HOST = "fantasyloi.leagueofireland.ie";
+  const HOST = "fantasyloi.leagueofireland.ie", TEAM = ${team};
   const POS = [["Goalkeeper", "GK"], ["Defender", "DEF"], ["Midfielder", "MID"], ["Forward", "FWD"]];
-  const say = (m, c) => console.log("%cfancystats: " + m, "color:" + c + ";font-weight:bold");
+  const say = (m, c) => console.log("%cfancystats: " + m, "color:" + (c || "gray") + ";font-weight:bold");
   if (!location.hostname.endsWith(HOST)) return say("run this on a " + HOST + " tab.", "red");
-  const token = document.querySelector("input[name=__RequestVerificationToken]")?.value;
-  const clubSel = document.querySelector("select#Club");
-  if (!token || !clubSel) return say("couldn't find the search form — make sure you're logged in, open Stats > Player Stats, then re-run.", "red");
-  const clubs = [...clubSel.options].filter((o) => o.value !== "All").map((o) => ({ id: o.value, name: o.text.trim() }));
-  window.fancystatsFantasyBlob = null; // clear any earlier run's blob so a failure can't leave a stale one to copy
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const txt = (e) => (e ? e.textContent : "").replace(/\\s+/g, " ").trim();
   const num = (s) => { const m = String(s == null ? "" : s).match(/-?\\d+(?:\\.\\d+)?/); return m ? parseFloat(m[0]) : null; };
-  const post = async (Statistic, Club, Position) => {
-    const body = new URLSearchParams({ Statistic, Club, Position, __RequestVerificationToken: token });
-    const r = await fetch("/Stats/PlayerStats", { method: "POST", body, credentials: "include" });
-    if (!r.ok) throw new Error("HTTP " + r.status + " on " + Statistic + "/" + Club + "/" + Position);
-    const doc = new DOMParser().parseFromString(await r.text(), "text/html");
-    if (!doc.querySelector("select#Club")) throw new Error("session expired — log in again, then re-run");
-    return [...doc.querySelectorAll("table.table tbody tr")].map((tr) => {
-      const img = tr.querySelector("img");
-      return {
-        name: (tr.cells[1] ? tr.cells[1].textContent : "").trim(),
-        value: num(tr.cells[2] ? tr.cells[2].textContent : null),
-        crest: img ? img.getAttribute("src") : "",
-      };
-    }).filter((x) => x.name);
+  const path = (src) => { try { return new URL(src, location.href).pathname; } catch (e) { return src || ""; } };
+  const load = async (url, init) => {
+    for (let attempt = 0; ; attempt++) {
+      const r = await fetch(url, Object.assign({ credentials: "include" }, init));
+      if (r.ok) {
+        const doc = new DOMParser().parseFromString(await r.text(), "text/html");
+        await sleep(300);
+        return doc;
+      }
+      if (attempt >= 1) throw new Error("HTTP " + r.status + " on " + url);
+      await sleep(1500);
+    }
   };
   try {
-    const rows = new Map();          // "name|clubId" -> merged row
-    const crestToClub = new Map();
+    // 1. prices, positions, totals: the Player Stats form, read from a fetched copy so any page works
+    const statsPage = await load("/Stats/PlayerStats");
+    const tokenEl = statsPage.querySelector("input[name=__RequestVerificationToken]");
+    const clubSel = statsPage.querySelector("select#Club");
+    if (!tokenEl || !clubSel) throw new Error("couldn't read the Player Stats form — log in on the fantasy site, then re-run");
+    const token = tokenEl.value;
+    const clubs = [...clubSel.options].filter((o) => o.value !== "All").map((o) => ({ id: o.value, name: o.text.trim() }));
+    const post = async (Statistic, Club, Position) => {
+      const doc = await load("/Stats/PlayerStats", { method: "POST", body: new URLSearchParams({ Statistic, Club, Position, __RequestVerificationToken: token }) });
+      if (!doc.querySelector("select#Club")) throw new Error("session expired — log in again, then re-run");
+      return [...doc.querySelectorAll("table.table tbody tr")].map((tr) => {
+        const img = tr.querySelector("img");
+        return { name: txt(tr.cells[1]), value: num(tr.cells[2] ? tr.cells[2].textContent : null), crest: img ? path(img.getAttribute("src")) : "" };
+      }).filter((x) => x.name);
+    };
+    const rows = new Map(), crestToClub = new Map();
     const key = (n, c) => n + "|" + c;
-    for (const c of clubs) {                                   // pass A — price, club exact
+    for (const c of clubs) {
       const list = await post("Value", c.id, "All");
       for (const x of list) {
         if (x.crest) crestToClub.set(x.crest, c.id);
         const k = key(x.name, c.id);
         rows.set(k, Object.assign({}, rows.get(k), { name: x.name, clubId: c.id, price: x.value }));
       }
-      say("club " + c.name + ": " + list.length, "gray");
-      await sleep(300);
+      say("prices — " + c.name + ": " + list.length);
     }
-    for (const pair of POS) {                                  // pass B — points, position exact
+    for (const pair of POS) {
       const list = await post("Total Score", "All", pair[0]);
       for (const x of list) {
-        const clubId = crestToClub.get(x.crest) || null;       // unknown crest -> null, never a guess
+        const clubId = crestToClub.get(x.crest) || null;
         const k = key(x.name, clubId);
         rows.set(k, Object.assign({}, rows.get(k), { name: x.name, clubId: clubId, position: pair[1], sitePoints: x.value }));
       }
-      say(pair[1] + ": " + list.length, "gray");
-      await sleep(300);
+      say("points — " + pair[1] + ": " + list.length);
     }
-    const blob = { meta: { source: "fantasyloi", capturedAt: Date.now(), clubs: clubs }, players: [...rows.values()] };
-    const json = JSON.stringify(blob);
-    // copy() (the DevTools Command Line API) is out of scope inside an async IIFE
-    // after an await, and navigator.clipboard rejects while focus is in DevTools —
-    // so stash on window and offer the manual copy as the fallback.
-    window.fancystatsFantasyBlob = json;
-    try { await navigator.clipboard.writeText(json); } catch (err) { /* not focused — use the fallback */ }
-    say("captured " + blob.players.length + " players. If your clipboard is empty, run  copy(fancystatsFantasyBlob)  then paste into the app.", "lime");
+    const club = (img) => (img ? crestToClub.get(path(img.getAttribute("src"))) || null : null);
+    const byName = new Map();
+    for (const row of rows.values()) byName.set(row.name, byName.has(row.name) ? null : row); // null = ambiguous
+    // 2. site ids: Transfers lists every player you don't own
+    const tr = await load("/Team/Transfers");
+    const body = tr.querySelector("#boday");
+    if (!body) throw new Error("couldn't read the Transfers page — log in on the fantasy site, then re-run");
+    const ids = new Set();
+    for (const r of body.querySelectorAll("tr")) {
+      const id = num(txt(r.cells[7]));
+      if (!id) continue;
+      ids.add(id);
+      const img = r.cells[2] ? r.cells[2].querySelector("img") : null;
+      if (img) { // its title names the club: teach the crest map this crest path too
+        const c = clubs.find((x) => x.name === img.getAttribute("title"));
+        if (c) crestToClub.set(path(img.getAttribute("src")), c.id);
+      }
+      const name = txt(r.cells[1]);
+      const row = rows.get(key(name, club(img))) || byName.get(name);
+      if (row) row.siteId = id;
+    }
+    say("site ids: " + ids.size);
+    // 3. your team, every gameweek
+    const first = await load("/Results?teamId=" + TEAM + "&gameweek=1");
+    const gws = [...new Set([...first.querySelectorAll("select option")].map((o) => Number(o.value))
+      .filter((n) => Number.isInteger(n) && n > 0 && n < 100))].sort((a, b) => a - b);
+    if (!gws.length) throw new Error("couldn't read your Results page — check your team id (" + TEAM + ") and that you're logged in");
+    const card = (el) => {
+      const m = (el.getAttribute("onclick") || "").match(/playerScore\\('(\\d+)',\\s*'(.*)',\\s*'(-?\\d+)'\\)/);
+      return m && { id: Number(m[1]), name: m[2], pts: Number(m[3]), captain: el.textContent.includes("(c)") };
+    };
+    const myTeam = {}, squadIds = new Map();
+    for (const gw of gws) {
+      const doc = gw === 1 ? first : await load("/Results?teamId=" + TEAM + "&gameweek=" + gw);
+      const pitch = doc.querySelector(".pitch");
+      if (!pitch) continue;
+      const lines = [...pitch.children].map((row) => [...row.querySelectorAll("[onclick^=playerScore]")].map(card).filter(Boolean)).filter((l) => l.length);
+      const bench = [...doc.querySelectorAll("[onclick^=playerScore]")].filter((el) => !pitch.contains(el)).map(card).filter(Boolean);
+      const all = lines.flat().concat(bench);
+      if (!all.length) continue;
+      const h = [...doc.querySelectorAll("h2")].find((x) => /Points/.test(x.textContent));
+      const g = { lines: lines.map((l) => l.map((x) => x.id)), bench: bench.map((x) => x.id),
+        captain: (all.find((x) => x.captain) || {}).id || null, shown: {}, names: {}, total: h ? num(h.textContent) : null };
+      for (const x of all) { g.shown[x.id] = x.pts; g.names[x.id] = x.name; ids.add(x.id); squadIds.set(x.name, x.id); }
+      myTeam[gw] = g;
+      say("your team — GW " + gw + ": " + (g.total == null ? "?" : g.total) + " pts");
+    }
+    // squad players aren't on Transfers: join them to their Player Stats row by name
+    for (const row of rows.values()) if (row.siteId == null && squadIds.has(row.name)) row.siteId = squadIds.get(row.name);
+    // 4. every player's season, gameweek by gameweek
+    const history = {};
+    let n = 0;
+    for (const id of ids) {
+      const doc = await load("/ViewPlayer/ViewPlayer?playerId=" + id);
+      history[id] = [...doc.querySelectorAll('[id$="+MatchDetails"]')].map((b) => {
+        const imgs = b.querySelectorAll(".card-body img");
+        const stats = [...b.querySelectorAll("table tbody tr")].map((r) => [...r.cells].map(txt))
+          .filter((r) => r.length === 3 && r[0] !== "Stat").map((r) => [r[0], r[1], num(r[2])]);
+        return [num(txt(b.querySelector(".card-header label"))), club(imgs[0]), club(imgs[1]), num(txt(b.querySelector(".card-body p"))), stats];
+      });
+      if (++n % 25 === 0) say("history: " + n + "/" + ids.size);
+    }
+    const blob = { meta: { source: "fantasyloi-sync", version: 1, capturedAt: Date.now(), siteTeamId: TEAM, clubs: clubs },
+      players: [...rows.values()], history: history, myTeam: myTeam };
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(blob)], { type: "application/json" }));
+    a.download = "fancystats-sync-" + new Date().toISOString().slice(0, 10) + ".json";
+    document.body.appendChild(a); a.click(); a.remove();
+    say("done — " + blob.players.length + " players, " + ids.size + " histories, " + Object.keys(myTeam).length +
+      " gameweeks of your team. Load the downloaded file in fancystats → ⚙ → Fantasy sync.", "lime");
   } catch (e) {
-    // all-or-nothing: the blob is only built after both passes, so a throw here
-    // means nothing was captured. Say so — an error alone reads as "partly done".
     say(e.message + " — nothing captured, re-run from the start.", "red");
   }
 })();`;

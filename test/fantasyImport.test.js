@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseFantasyBlob, mapClubs, withTeamIds, buildFantasySnippet, shouldCreateRow, parseSyncBlob } from "../src/lib/fantasyImport.js";
+import { parseFantasyBlob, mapClubs, withTeamIds, buildSyncSnippet, shouldCreateRow, parseSyncBlob } from "../src/lib/fantasyImport.js";
 
 const goodBlob = () => ({
   meta: { source: "fantasyloi", capturedAt: 1770000000000, clubs: [{ id: "14420", name: "Bohemians" }] },
@@ -97,32 +97,25 @@ describe("withTeamIds", () => {
   });
 });
 
-describe("buildFantasySnippet", () => {
-  const snip = buildFantasySnippet();
-  it("posts the site's own search form", () => {
-    expect(snip).toContain("/Stats/PlayerStats");
-    expect(snip).toContain("__RequestVerificationToken");
-    expect(snip).toContain('method: "POST"');
-    expect(snip).toContain('credentials: "include"');
-    expect(snip).toContain("table.table tbody tr"); // scoped to the results table, not any table on the page
-  });
-  it("runs both statistic passes and every position", () => {
-    expect(snip).toContain('"Value"');
-    expect(snip).toContain('"Total Score"');
-    for (const p of ["Goalkeeper", "Defender", "Midfielder", "Forward"]) expect(snip).toContain(p);
-  });
-  it("guards the host and the logged-out case", () => {
-    expect(snip).toContain("fantasyloi.leagueofireland.ie");
-    expect(snip).toContain("logged in");
-  });
-  it("stashes the blob for copying, with a runnable fallback", () => {
-    expect(snip).toContain("fancystatsFantasyBlob");
-    expect(snip).toContain("navigator.clipboard.writeText");
-    expect(snip).toContain("copy(fancystatsFantasyBlob)");
-    expect(snip).toContain('"fantasyloi"'); // meta.source the app validates
-  });
-  it("is syntactically valid JavaScript", () => {
+describe("buildSyncSnippet", () => {
+  const snip = buildSyncSnippet({ siteTeamId: 7378 });
+  it("is valid JavaScript", () => {
     expect(() => new Function(snip)).not.toThrow();
+  });
+  it("embeds the team id and reads the four site pages", () => {
+    expect(snip).toContain("TEAM = 7378");
+    for (const p of ["/Stats/PlayerStats", "/Team/Transfers", "/Results?teamId=", "/ViewPlayer/ViewPlayer?playerId="]) {
+      expect(snip).toContain(p);
+    }
+  });
+  it("produces a version-1 sync file as a download", () => {
+    expect(snip).toContain('source: "fantasyloi-sync", version: 1');
+    expect(snip).toContain("fancystats-sync-");
+    expect(snip).toContain(".download");
+  });
+  it("refuses to build without a team id", () => {
+    expect(() => buildSyncSnippet({})).toThrow(/team id/);
+    expect(() => buildSyncSnippet({ siteTeamId: "abc" })).toThrow(/team id/);
   });
 });
 
