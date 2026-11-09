@@ -68,6 +68,8 @@ export function parseSyncBlob(text) {
     players,
     history: obj(blob.history),
     myTeam: obj(blob.myTeam),
+    // player pages the site couldn't serve (persistent HTTP 500): no history for them
+    failed: (Array.isArray(blob.meta.failed) ? blob.meta.failed : []).map(numOrNull).filter((x) => x != null),
   };
 }
 
@@ -216,11 +218,22 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
     // squad players aren't on Transfers: join them to their Player Stats row by name
     for (const row of rows.values()) if (row.siteId == null && squadIds.has(row.name)) row.siteId = squadIds.get(row.name);
     // 4. every player's season, gameweek by gameweek
-    const history = {};
+    const history = {}, failed = [];
     const totalOf = new Map([...rows.values()].filter((x) => x.siteId != null).map((x) => [x.siteId, x.sitePoints]));
     let n = 0;
     for (const id of ids) {
-      const doc = await load("/ViewPlayer/ViewPlayer?playerId=" + id);
+      let doc;
+      try {
+        doc = await load("/ViewPlayer/ViewPlayer?playerId=" + id);
+      } catch (e) {
+        // Some player pages fail on the site every time (HTTP 500): skip those, list them in
+        // the file, and stop only if many do (then the site itself is struggling).
+        if (!/^HTTP 5/.test(e.message)) throw e;
+        failed.push(id);
+        if (failed.length > 5) throw new Error("the fantasy site is failing on many player pages — try again later");
+        say("player " + id + "'s page fails on the site — skipped", "orange");
+        continue;
+      }
       history[id] = [...doc.querySelectorAll('[id$="+MatchDetails"]')].map((b) => {
         const imgs = b.querySelectorAll(".card-body img");
         const stats = [...b.querySelectorAll("table tbody tr")].map((r) => [...r.cells].map(txt))
@@ -232,14 +245,14 @@ export function buildSyncSnippet({ siteTeamId } = {}) {
       }
       if (++n % 25 === 0) say("history: " + n + "/" + ids.size);
     }
-    const blob = { meta: { source: "fantasyloi-sync", version: 1, capturedAt: Date.now(), siteTeamId: TEAM, clubs: clubs },
+    const blob = { meta: { source: "fantasyloi-sync", version: 1, capturedAt: Date.now(), siteTeamId: TEAM, clubs: clubs, failed: failed },
       players: [...rows.values()], history: history, myTeam: myTeam };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(blob)], { type: "application/json" }));
     a.download = "fancystats-sync-" + new Date().toISOString().slice(0, 10) + ".json";
     document.body.appendChild(a); a.click(); a.remove();
     say("done — " + blob.players.length + " players, " + ids.size + " histories, " + Object.keys(myTeam).length +
-      " gameweeks of your team. Load the downloaded file in fancystats → ⚙ → Fantasy sync.", "lime");
+      " gameweeks of your team" + (failed.length ? ", " + failed.length + " player page(s) skipped" : "") + ". Load the downloaded file in fancystats → ⚙ → Fantasy sync.", "lime");
   } catch (e) {
     say(e.message + " — nothing captured, re-run from the start.", "red");
   }

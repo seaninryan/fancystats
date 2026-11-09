@@ -99,6 +99,11 @@ describe("withTeamIds", () => {
 
 describe("buildSyncSnippet", () => {
   const snip = buildSyncSnippet({ siteTeamId: 7378 });
+  it("skips a player page the site keeps failing on, but only a few", () => {
+    expect(snip).toContain("failed.push(id)");
+    expect(snip).toContain("failed.length > 5");
+    expect(snip).toContain("failed: failed");
+  });
   it("is valid JavaScript", () => {
     expect(() => new Function(snip)).not.toThrow();
   });
@@ -194,6 +199,11 @@ describe("parseSyncBlob", () => {
     const r = parseSyncBlob(blob({ history: undefined, myTeam: undefined }));
     expect(r.history).toEqual({});
     expect(r.myTeam).toEqual({});
+    expect(r.failed).toEqual([]);
+  });
+  it("carries the site ids of player pages the site couldn't load", () => {
+    const r = parseSyncBlob(blob({ meta: { source: "fantasyloi-sync", version: 1, clubs: [], failed: [250, "x"] } }));
+    expect(r.failed).toEqual([250]);
   });
   it("rejects bad JSON, the wrong source, an unknown version and an empty capture", () => {
     expect(() => parseSyncBlob("{nope")).toThrow(/Couldn't read/);

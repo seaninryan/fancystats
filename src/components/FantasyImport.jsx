@@ -135,6 +135,13 @@ export default function FantasyImport({ data, fullData, update }) {
             ✓ {preview.matched.length} matched · {preview.unmatched.length} unmatched
             {newCount ? ` · ${newCount} to add as new` : ""} · {historyCount} player histories · {teamGws} gameweeks of your team
           </p>
+          {preview.parsed.failed.length > 0 && (
+            <p className="dim">
+              Skipped {preview.parsed.failed.length} player page{preview.parsed.failed.length === 1 ? "" : "s"} the
+              fantasy site couldn&rsquo;t load ({preview.parsed.failed.map((id) =>
+                preview.parsed.players.find((x) => x.siteId === id)?.name ?? `#${id}`).join(", ")}) — their points use our own scoring.
+            </p>
+          )}
           {attention.length > 0 && (
             <div className="banner warn">
               <strong>Site gameweeks needing attention</strong>
