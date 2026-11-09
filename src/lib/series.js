@@ -1,7 +1,7 @@
 // src/lib/series.js
 // Per-gameweek chart series, derived at render time from matches/appearances —
 // nothing pre-computed, consistent with the rest of the data model.
-import { scoreAppearance } from "./scoring.js";
+import { appearancePoints } from "./sitePoints.js";
 import { matchRound } from "./store.js";
 
 const imported = (m) => m.importedAt && m.goalTimes;
@@ -53,8 +53,8 @@ export const PLAYER_STATS = [
 
 // One appearance's contribution to a stat. Count-stat conventions mirror
 // leagueTable so graphs agree with the table columns at both levels.
-function appearanceStat(a, m, position, adj, stat) {
-  if (stat === "fantasy") return scoreAppearance(a, m, position, adj).total;
+function appearanceStat(data, a, m, position, adj, stat) {
+  if (stat === "fantasy") return appearancePoints(data, a).total ?? 0;
   const eff = { ...a };
   if (adj) {
     for (const f of ["goals", "assists"]) {
@@ -99,7 +99,7 @@ export function playerWeeklySeries(data, playerId, stat = "fantasy", opts = {}) 
     const r = matchRound(m);
     if (r == null) continue;
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    byRound.set(r, (byRound.get(r) || 0) + appearanceStat(a, m, position, adj, stat));
+    byRound.set(r, (byRound.get(r) || 0) + appearanceStat(data, a, m, position, adj, stat));
   }
   return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));
 }
@@ -152,8 +152,12 @@ export function teamWeeklySeries(data, teamId, stat, opts = {}) {
       if (r == null) continue;
       const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
       const p = data.players[a.playerId];
-      if (stat === "fantasy" && !p?.gamePosition) continue; // no computable points
-      byRound.set(r, (byRound.get(r) || 0) + appearanceStat(a, m, p?.gamePosition, adj, stat));
+      if (stat === "fantasy") {
+        const pts = appearancePoints(data, a).total;
+        if (pts != null) byRound.set(r, (byRound.get(r) || 0) + pts); // null: no computable points
+        continue;
+      }
+      byRound.set(r, (byRound.get(r) || 0) + appearanceStat(data, a, m, p?.gamePosition, adj, stat));
     }
   }
   return rounds.map((round) => ({ round, value: byRound.has(round) ? byRound.get(round) : null }));

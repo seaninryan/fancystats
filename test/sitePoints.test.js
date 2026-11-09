@@ -1,7 +1,8 @@
 // test/sitePoints.test.js
 import { describe, it, expect } from "vitest";
-import { emptyData, applyImport, setPlayerField, setMatchRound, setAdjustment, applySiteSync } from "../src/lib/store.js";
+import { emptyData, applyImport, setPlayerField, setMatchRound, setAdjustment, applySiteSync, playerTotals, leagueTable, allMatchTeamPoints, hotEventIds, mismatchInfo } from "../src/lib/store.js";
 import { seasonView } from "../src/lib/seasons.js";
+import { playerWeeklySeries, teamWeeklySeries } from "../src/lib/series.js";
 import { siteIndex, appearancePoints, diffComponents, unresolvedSummary } from "../src/lib/sitePoints.js";
 
 const NOW = 1765000000000;
@@ -115,5 +116,33 @@ describe("unresolvedSummary", () => {
       { gw: 3, reason: "no-appearance", count: 1, names: ["A Keena"] },
       { gw: 5, reason: "no-match", count: 1, names: ["A Keena"] },
     ]);
+  });
+});
+
+describe("derivations use site points", () => {
+  const synced = () => view(sync(base(), { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] }));
+  it("playerTotals: site 12 for R1 + ours 4 for R2", () => {
+    expect(playerTotals(synced(), "10").points).toBe(16);
+  });
+  it("leagueTable fantasy and allMatchTeamPoints", () => {
+    const v = synced();
+    expect(leagueTable(v).find((r) => r.teamId === 1).fantasy).toBe(16); // Burke has no position -> nothing
+    expect(allMatchTeamPoints(v).get(100)).toEqual({ home: 12, away: 0 });
+  });
+  it("series: player and team fantasy per gameweek", () => {
+    const v = synced();
+    expect(playerWeeklySeries(v, "10", "fantasy").find((p) => p.round === 1).value).toBe(12);
+    expect(teamWeeklySeries(v, 1, "fantasy").find((p) => p.round === 1).value).toBe(12);
+  });
+  it("hotEventIds scores with site points", () => {
+    let d = imp(base(), match(103, 3, 1, 2, 2, 1), [app(103, 10, 1), app(103, 11, 1)]);
+    d = sync(d, { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST], [2, "c3", "c1", 12, FT_WIN_GOAL_ASSIST], [3, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] });
+    expect(hotEventIds(view(d), "10").size).toBeGreaterThan(0);
+  });
+  it("mismatchInfo compares our scoring on both sides", () => {
+    let d = setPlayerField(base(), 10, "realPosition", "MID");
+    d = sync(d, { "501": [[1, "c1", "c2", 12, FT_WIN_GOAL_ASSIST]] });
+    // ours FWD (9 + 4) vs ours MID (10 + 4): delta -1, the site's 12 plays no part
+    expect(mismatchInfo(view(d), "10")).toEqual({ realPosition: "MID", delta: -1 });
   });
 });

@@ -1,6 +1,6 @@
 // src/lib/store.js
 // Pure operations on the fancystats.json data object. Every mutator returns a new object.
-import { scoreAppearance } from "./scoring.js";
+import { appearancePoints } from "./sitePoints.js";
 import { normalizeName, surnameInitialKey } from "./pasteImport.js";
 
 export const POS_MAP = { G: "GK", D: "DEF", M: "MID", F: "FWD" };
@@ -206,10 +206,9 @@ export function playerTotals(data, playerId, opts = {}) {
     }
     t.minutes += eff.minutes; t.goals += eff.goals; t.assists += eff.assists; t.pens += eff.penScored || 0;
     a.started ? t.starts++ : t.subApps++;
-    if (t.points !== null) {
-      const match = data.matches[a.eventId];
-      if (match?.goalTimes) t.points += scoreAppearance(a, match, position, adj).total;
-    }
+    // site points win (sitePoints.js); an explicit opts.position is a what-if -> ours only
+    const pts = appearancePoints(data, a, { position: opts.position ?? null }).total;
+    if (pts != null) t.points = (t.points ?? 0) + pts;
   }
   return t;
 }
@@ -396,7 +395,7 @@ export function mismatchInfo(data, playerId, apps = null) {
     if (derived && derived.total >= 3) real = derived.position;
   }
   if (!real || real === player.gamePosition) return null;
-  const gamePts = playerTotals(data, playerId, { apps: theirApps }).points ?? 0;
+  const gamePts = playerTotals(data, playerId, { position: player.gamePosition, apps: theirApps }).points ?? 0;
   const realPts = playerTotals(data, playerId, { position: real, apps: theirApps }).points ?? 0;
   return { realPosition: real, delta: gamePts - realPts };
 }
@@ -462,8 +461,7 @@ export function hotEventIds(data, playerId, appsArg = null) {
   const scores = teamMatches.map((m) => {
     const a = byEvent.get(m.eventId);
     if (!a) return null; // didn't play that one — consumes a slot
-    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    return scoreAppearance(a, m, player.gamePosition, adj).total;
+    return appearancePoints(data, a).total;
   });
   for (let i = 0; i < teamMatches.length; i++) {
     const from = Math.max(0, i - HOT_WINDOW + 1);
@@ -674,29 +672,24 @@ export function leagueTable(data, win = null) {
     r.reds += (eff.red ? 1 : 0) + (eff.secondYellow ? 1 : 0);    // dismissals
     r.pensScored += eff.penScored || 0;
     r.pensMissed += eff.penMissed || 0;
-    const p = data.players[a.playerId];
-    if (p?.gamePosition) r.fantasy += scoreAppearance(a, m, p.gamePosition, adj).total;
+    const pts = appearancePoints(data, a).total;
+    if (pts != null) r.fantasy += pts;
   }
   return [...rows.values()].sort(leagueOrder);
 }
 
 // One pass over all appearances: eventId -> { home, away } fantasy-point sums.
-// Positionless players contribute nothing (they have no computable points).
+// Players with no points (no position and no site value) contribute nothing.
 export function allMatchTeamPoints(data) {
   const out = new Map();
   for (const a of Object.values(data.appearances)) {
     const m = data.matches[a.eventId];
     if (!m?.goalTimes) continue;
-    const p = data.players[a.playerId];
-    if (!p?.gamePosition) {
-      if (!out.has(a.eventId)) out.set(a.eventId, { home: 0, away: 0 });
-      continue;
-    }
-    const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    const side = a.teamId === m.homeTeamId ? "home" : "away";
     const t = out.get(a.eventId) || { home: 0, away: 0 };
-    t[side] += scoreAppearance(a, m, p.gamePosition, adj).total;
     out.set(a.eventId, t);
+    const pts = appearancePoints(data, a).total;
+    if (pts == null) continue; // no computable points (no position, no site value)
+    t[a.teamId === m.homeTeamId ? "home" : "away"] += pts;
   }
   return out;
 }
