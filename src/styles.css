@@ -200,3 +200,6 @@ tbody tr:hover td.err-cell { background: #fbdcd7; }
 .cmp-chips .clock-half { border-radius: 4px; padding: 0 3px; }
 .cmp-chips .clock-half.half-up { background: #dcf0e4; color: #14512f; }
 .cmp-chips .clock-half.half-down { background: #fbdcd7; color: #8c1d18; }
+
+/* points from our scoring where the fantasy site has no value yet */
+.chip.est, .est { font-style: italic; opacity: 0.85; }

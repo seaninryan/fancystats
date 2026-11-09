@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, playerOutNow, mismatchInfo, playerName, removeFantasyOnlyPlayer } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
-import { scoreAppearance } from "../lib/scoring.js";
+import { appearancePoints, diffComponents } from "../lib/sitePoints.js";
 import { TeamPill, PosPill } from "./Pills.jsx";
 import { previousSeasonTotals } from "../lib/seasons.js";
 
@@ -153,7 +153,16 @@ export default function PlayerDetail({ data, fullData, readOnly, update, playerI
               const m = data.matches[a.eventId];
               const key = `${a.eventId}:${a.playerId}`;
               const adj = data.adjustments[key];
-              const score = p.gamePosition && m?.goalTimes ? scoreAppearance(a, m, p.gamePosition, adj) : null;
+              const res = appearancePoints(data, a);
+              const diff = res.site && res.ours && res.site.total !== res.ours.total && !res.site.notInGame
+                ? diffComponents(res.site.rows, res.ours.breakdown) : null;
+              const est = !!data.site && res.source === "ours";
+              const tip = res.site?.notInGame
+                ? "not in the fantasy game that week (the site scored 0)"
+                : res.site
+                  ? res.site.rows.map(([s, v, p]) => `${s} ${v}: ${p > 0 ? "+" : ""}${p}`).join(", ") +
+                    (adj ? " · the site's value overrides your adjustment" : "")
+                  : res.ours ? res.ours.breakdown.map(([r, v]) => `${r} ${v > 0 ? "+" : ""}${v}`).join(", ") : "";
               return (
                 <tr key={key}>
                   <td>R{m ? matchRound(m) : "?"} {a.teamId === m?.homeTeamId ? "v" : "@"} <TeamPill team={data.teams[a.teamId === m?.homeTeamId ? m?.awayTeamId : m?.homeTeamId]} /></td>
@@ -161,8 +170,10 @@ export default function PlayerDetail({ data, fullData, readOnly, update, playerI
                   <td>{a.goals + (adj?.goals || 0)}{adj?.goals ? "✏" : ""}</td>
                   <td>{a.assists + (adj?.assists || 0)}{adj?.assists ? "✏" : ""}</td>
                   <td>{a.positionPlayed}</td>
-                  <td title={score ? score.breakdown.map(([r, v]) => `${r} ${v > 0 ? "+" : ""}${v}`).join(", ") : ""}>
-                    {score ? score.total : "—"}
+                  <td title={est ? `our estimate (site not captured yet): ${tip}` : tip} className={est ? "est" : undefined}>
+                    {res.total ?? "—"}
+                    {diff && <span className="dim"> · ours {res.ours.total} ({diff.join(", ")})</span>}
+                    {res.site?.notInGame && <span className="dim"> · not in the fantasy game that week</span>}
                   </td>
                   <td><button onClick={() => setAdjustKey(key)}>✏</button></td>
                 </tr>

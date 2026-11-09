@@ -18,7 +18,11 @@ export function ptsColor(pts) {
   return `hsl(${hue} 68% 36%)`;
 }
 
-export function PtsPill({ pts }) {
+// est: our own scoring, not the site's (shown once the season has site data)
+export function PtsPill({ pts, est = false }) {
   if (pts == null) return <span className="dim">·</span>;
-  return <span className="chip" style={{ background: ptsColor(pts), color: "#fff" }}>{pts}</span>;
+  return (
+    <span className={`chip${est ? " est" : ""}`} style={{ background: ptsColor(pts), color: "#fff" }}
+      title={est ? "our estimate (site not captured yet)" : undefined}>{pts}</span>
+  );
 }

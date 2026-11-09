@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { matchRound, setPlayerField, playerName, missingFantasyData, setAbsence, getAbsence, playerOutNow, setTeamColor, isHot, hotEventIds } from "../lib/store.js";
-import { scoreAppearance } from "../lib/scoring.js";
+import { appearancePoints } from "../lib/sitePoints.js";
 import { teamColor } from "../lib/teamColors.js";
 import { TeamPill, PosPill, PtsPill } from "./Pills.jsx";
 
@@ -115,9 +115,7 @@ export default function TeamsTab({ data, update, openPlayer, focusTeam }) {
     const t = totals.get(a.playerId);
     t.apps++; // all-time, used for default row order
     const adj = data.adjustments[`${a.eventId}:${a.playerId}`] || null;
-    const pp = data.players[a.playerId];
-    const m = data.matches[a.eventId];
-    const pts = pp?.gamePosition && m?.goalTimes ? scoreAppearance(a, m, pp.gamePosition, adj).total : null;
+    const pts = appearancePoints(data, a).total;
     if (pts != null) t.seasonPoints = (t.seasonPoints ?? 0) + pts; // site cross-check is season-wide
     if (!windowIds.has(a.eventId)) continue;
     const g = (a.goals || 0) + (typeof adj?.goals === "number" ? adj.goals : 0);
@@ -278,8 +276,9 @@ export default function TeamsTab({ data, update, openPlayer, focusTeam }) {
                       const adj = data.adjustments[key];
                       const absence = getAbsence(data, m.eventId, pid);
                       const { sym, cls, title } = cellFor(a, adj);
-                      const pts = a && data.players[pid]?.gamePosition && m.goalTimes
-                        ? scoreAppearance(a, m, data.players[pid].gamePosition, adj).total : null;
+                      const res = a ? appearancePoints(data, a) : null;
+                      const pts = res?.total ?? null;
+                      const est = !!data.site && res?.source === "ours";
                       const winCls = windowIds.has(m.eventId) && win !== "all" ? " win-col" : "";
                       if (!a) {
                         return (
@@ -292,7 +291,7 @@ export default function TeamsTab({ data, update, openPlayer, focusTeam }) {
                       }
                       return (
                         <td key={m.eventId} className={`${cls}${winCls}`} title={hotEvents.has(m.eventId) ? `${title} — in form` : title}>
-                          <span className="cell-wrap"><span>{hotEvents.has(m.eventId) ? "🔥" : ""}{sym}</span><PtsPill pts={pts} /></span>
+                          <span className="cell-wrap"><span>{hotEvents.has(m.eventId) ? "🔥" : ""}{sym}</span><PtsPill pts={pts} est={est} /></span>
                         </td>
                       );
                     })}
