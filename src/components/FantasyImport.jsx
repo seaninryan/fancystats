@@ -1,5 +1,5 @@
 // src/components/FantasyImport.jsx — the Fantasy sync card (Settings).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildSyncSnippet, parseSyncBlob, mapClubs, withTeamIds, shouldCreateRow } from "../lib/fantasyImport.js";
 import { matchPlayers } from "../lib/pasteImport.js";
 import { applySiteSync } from "../lib/store.js";
@@ -39,6 +39,7 @@ export default function FantasyImport({ data, fullData, update }) {
   const teamId = Number(data.meta.siteTeamId);
   const snippet = useMemo(() => (teamId > 0 ? buildSyncSnippet({ siteTeamId: teamId }) : ""), [teamId]);
 
+  useEffect(() => { setTeamInput(data.meta.siteTeamId ?? ""); }, [data.meta.siteTeamId]);
   const saveTeam = () => {
     const n = Number(teamInput);
     if (Number.isInteger(n) && n > 0 && n !== data.meta.siteTeamId) {
@@ -110,7 +111,8 @@ export default function FantasyImport({ data, fullData, update }) {
       <div className="row">
         <label>Your fantasy team id{" "}
           <input value={teamInput} style={{ width: 90 }} inputMode="numeric"
-            onChange={(e) => setTeamInput(e.target.value)} onBlur={saveTeam} />
+            onChange={(e) => setTeamInput(e.target.value)} onBlur={saveTeam}
+            onKeyDown={(e) => { if (e.key === "Enter") saveTeam(); }} />
         </label>
         <span className="dim">the number in your Results page link (…teamId=<b>7378</b>)</span>
       </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { setPlayerField, setAdjustment, playerAppearances, deriveRealPosition, matchRound, playerOutNow, mismatchInfo, playerName, removeFantasyOnlyPlayer } from "../lib/store.js";
 import { teamColor } from "../lib/teamColors.js";
 import { appearancePoints, diffComponents } from "../lib/sitePoints.js";
@@ -33,7 +33,7 @@ function AdjustForm({ adj, onSave, onCancel }) {
 export default function PlayerDetail({ data, fullData, readOnly, update, playerId, onBack }) {
   const [adjustKey, setAdjustKey] = useState(null);
   const p = data.players[playerId];
-  const last = !readOnly && fullData ? previousSeasonTotals(fullData, playerId) : null;
+  const last = useMemo(() => (!readOnly && fullData ? previousSeasonTotals(fullData, playerId) : null), [readOnly, fullData, playerId]);
   if (!p) return <div className="card dim">Player not found. <button onClick={onBack}>←</button></div>;
   const apps = playerAppearances(data, playerId);
   const derived = deriveRealPosition(apps);
