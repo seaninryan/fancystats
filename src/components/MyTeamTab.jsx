@@ -6,7 +6,7 @@ import TeamLines from "./TeamLines.jsx";
 import GameweekChart from "./GameweekChart.jsx";
 import SuggestionsPanel from "./SuggestionsPanel.jsx";
 
-export default function MyTeamTab({ data, openPlayer }) {
+export default function MyTeamTab({ data, openPlayer, update, readOnly }) {
   const gws = myTeamGameweeks(data);
   const [picked, setPicked] = useState(null);
   const [cumulative, setCumulative] = useState(false);
@@ -35,7 +35,7 @@ export default function MyTeamTab({ data, openPlayer }) {
       </div>
       <TeamLines team={t} openPlayer={openPlayer} />
       <GameweekChart series={series} cumulative={cumulative} onToggleCumulative={() => setCumulative(!cumulative)} />
-      <SuggestionsPanel data={data} openPlayer={openPlayer} />
+      <SuggestionsPanel data={data} openPlayer={openPlayer} update={update} readOnly={readOnly} />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { emptyData, applyImport, upsertMatchStubs, applySiteSync, setPlayerField } from "../src/lib/store.js";
+import { emptyData, applyImport, upsertMatchStubs, applySiteSync, setPlayerField, setFantasyBank } from "../src/lib/store.js";
 import { seasonView } from "../src/lib/seasons.js";
 import { renderToStaticMarkup } from "react-dom/server";
 import MyTeamTab from "../src/components/MyTeamTab.jsx";
@@ -68,6 +68,19 @@ describe("SuggestionsPanel SSR", () => {
     expect(h).toContain("Best fixture runs");
     expect(h).toContain("🎯");
     expect(h).not.toContain("outlook is form only");
+  });
+  it("Swaps card: bank input and an affordable better same-position swap, or the empty state", () => {
+    const d = squad(withFixtures(played()), [510, 511, 540]);
+    const none = html(d);
+    expect(none).toContain("Swaps");
+    expect(none).toContain("Bank");
+    expect(none).toContain("No improving swap within budget.");
+    const h = html(setFantasyBank(d, 2)); // 40 (FWD, 5) -> 20 (FWD, 7)
+    expect(h).toContain("Swaps");
+    expect(h).toContain("P40");
+    expect(h).toContain("P20");
+    expect(h).toContain("€0.0m");
+    expect(h).not.toContain("No improving swap within budget.");
   });
   it("is absent without a captured squad", () => {
     expect(html(emptyData())).not.toContain("Suggestions");

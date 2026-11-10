@@ -1,6 +1,7 @@
 // src/components/SuggestionsPanel.jsx — sell / buy / fixture suggestions under My Team.
 import { useMemo, useState } from "react";
-import { suggestionContext, sellCandidates, buyTargets, fixtureRuns, mySquad } from "../lib/suggestions.js";
+import { suggestionContext, sellCandidates, buyTargets, fixtureRuns, mySquad, swapPairs } from "../lib/suggestions.js";
+import { setFantasyBank } from "../lib/store.js";
 
 const POSITIONS = ["GK", "DEF", "MID", "FWD"];
 const signed = (n) => `${n >= 0 ? "+" : ""}${n.toFixed(2)}`;
@@ -17,13 +18,15 @@ function Next({ fixtures, teams }) {
 
 const why = (o) => `form ${one(o.form)}/game (${o.points} pts in ${o.games}) · fixtures ${signed(o.ease)} → outlook ${one(o.score)}`;
 
-export default function SuggestionsPanel({ data, openPlayer }) {
+export default function SuggestionsPanel({ data, openPlayer, update = () => {}, readOnly = false }) {
   const [pos, setPos] = useState(null);
   const sctx = useMemo(() => suggestionContext(data, Date.now()), [data]);
   if (!mySquad(data).length) return null;
   const sell = sellCandidates(sctx);
   const buy = buyTargets(sctx, { position: pos });
   const runs = fixtureRuns(sctx);
+  const bank = data.meta?.fantasyBank ?? 0;
+  const swaps = swapPairs(sctx, { bank });
   const name = (playerId, label) => (
     <span className="cell-click" onClick={() => openPlayer(playerId)}>{label}</span>
   );
@@ -47,6 +50,31 @@ export default function SuggestionsPanel({ data, openPlayer }) {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="card scroll-x">
+        <div className="row">
+          <strong>Swaps</strong>
+          <label style={{ marginLeft: "auto" }}>Bank €
+            <input key={bank} type="number" step="0.1" style={{ width: "5em" }} defaultValue={bank} disabled={readOnly}
+              onBlur={(e) => update((d) => setFantasyBank(d, parseFloat(e.target.value)))} />m
+          </label>
+        </div>
+        {swaps.length === 0 ? <p className="dim">No improving swap within budget.</p> : (
+          <table>
+            <thead><tr><th>Sell</th><th></th><th>Buy</th><th>Gain</th><th title="bank after this swap">Bank</th></tr></thead>
+            <tbody>
+              {swaps.map(({ sell, buy, gain, bankAfter }) => (
+                <tr key={sell.playerId}>
+                  <td>{name(sell.playerId, sell.name)} <span className="dim">{sell.position} €{sell.price} · {one(sell.score)}</span></td>
+                  <td>→</td>
+                  <td>{name(buy.playerId, buy.name)}{buy.hot ? " 🔥" : ""} <span className="dim">{data.teams[buy.teamId]?.shortName ?? ""} €{buy.price} · {one(buy.score)}</span></td>
+                  <td title={`${why(sell)}\n${why(buy)}`}>+{one(gain)}</td>
+                  <td>€{bankAfter.toFixed(1)}m</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
       <div className="card scroll-x">
         <div className="row" style={{ flexWrap: "wrap" }}>
