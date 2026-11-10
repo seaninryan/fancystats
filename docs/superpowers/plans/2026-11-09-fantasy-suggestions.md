@@ -377,3 +377,107 @@ playerId string). Check the existing `.cell-click` class is the clickable-name c
 - [ ] **Step 4: Run** the new test, `npm test`, and `npm run build` — all pass.
 
 - [ ] **Step 5: Commit** `git commit -m "feat: Suggestions panel on My Team — weakest squad players, buy targets, fixture runs"`
+
+---
+
+## Part 2: swap pairs (spec addendum 2026-11-10)
+
+### Task 3: bank + swapPairs lib
+
+**Files:** Modify `src/lib/store.js` (add `setFantasyBank`), `src/lib/suggestions.js` (add `CLUB_LIMIT`, `swapPairs`); Test `test/suggestions.test.js`, `test/store.test.js`.
+
+- [ ] Tests first (reuse the `played()`/`squad()` builders in test/suggestions.test.js; give
+  players prices with `setPlayerField(d, pid, "price", x)`):
+  - `setFantasyBank(d, 1.5).meta.fantasyBank === 1.5`; returns a new object; original untouched; and `applySiteSync` on top keeps it.
+  - swapPairs returns only same-position replacements (sell a FWD → buy a FWD).
+  - affordability: a replacement priced above `sell.price + bank` is excluded; raising `bank` admits it; `bankAfter` is `sell.price + bank − buy.price`.
+  - club limit: with 3 squad players from club X (not the seller's club), a club-X candidate is excluded; if the seller IS from club X the candidate is allowed.
+  - excludes squad members, out players, `games === 0`; only `gain > 0`; sorted by gain desc; at most one row per seller; `sellCount` respected.
+  Build extra squad players/clubs as needed; keep fixtures realistic via `applyImport` (played) and `upsertMatchStubs` (upcoming).
+- [ ] Implement:
+
+```js
+// store.js
+// User-owned (syncs never touch it): the fantasy bank balance in €m, typed in on My Team.
+export function setFantasyBank(data, value) {
+  const next = structuredClone(data);
+  next.meta.fantasyBank = Number.isFinite(value) ? value : 0;
+  return next;
+}
+```
+
+```js
+// suggestions.js
+export const CLUB_LIMIT = 3; // most squad players from one club (site rule, user-confirmed)
+
+export function swapPairs(sctx, { bank = 0, sellCount = 5 } = {}) {
+  const { view } = sctx;
+  const squad = mySquad(view);
+  const owned = new Set(squad.map((e) => e.playerId).filter(Boolean));
+  const perClub = new Map();
+  for (const e of squad) {
+    const t = e.playerId != null ? view.players[e.playerId]?.teamId : null;
+    if (t != null) perClub.set(Number(t), (perClub.get(Number(t)) || 0) + 1);
+  }
+  const pool = Object.keys(view.players).filter((pid) => !owned.has(pid))
+    .map((pid) => playerOutlook(sctx, pid))
+    .filter((o) => o && o.games > 0 && !o.out && o.price != null);
+  const rows = [];
+  for (const { outlook: sell } of sellCandidates(sctx).filter((r) => r.outlook && r.outlook.price != null).slice(0, sellCount)) {
+    const budget = sell.price + bank;
+    let best = null;
+    for (const o of pool) {
+      if (o.position !== sell.position || o.price > budget + 1e-9) continue;
+      const after = (perClub.get(o.teamId) || 0) - (o.teamId === sell.teamId ? 1 : 0) + 1;
+      if (after > CLUB_LIMIT) continue;
+      if (!best || o.score > best.score) best = o;
+    }
+    if (best && best.score > sell.score) {
+      rows.push({ sell, buy: best, gain: best.score - sell.score, bankAfter: budget - best.price });
+    }
+  }
+  return rows.sort((a, b) => b.gain - a.gain);
+}
+```
+
+- [ ] `npm test` green; commit `feat: swap pairs — same position, within bank, club limit`.
+
+### Task 4: Swaps card
+
+**Files:** Modify `src/components/SuggestionsPanel.jsx`, `src/components/MyTeamTab.jsx` (pass `update`, `readOnly` through to the panel — App already gives every tab `update` and `readOnly`); Test `test/suggestionsPanel.test.jsx`.
+
+- [ ] SSR test: with a squad and a priced affordable better same-position player, the HTML contains "Swaps", "Bank", the seller and buyer names; with nothing improving, "No improving swap within budget."
+- [ ] Implement in the panel after the "Weakest in your squad" card:
+
+```jsx
+const bank = data.meta?.fantasyBank ?? 0;
+const swaps = swapPairs(sctx, { bank });
+// …
+<div className="card scroll-x">
+  <div className="row">
+    <strong>Swaps</strong>
+    <label style={{ marginLeft: "auto" }}>Bank €
+      <input type="number" step="0.1" style={{ width: "5em" }} defaultValue={bank} disabled={readOnly}
+        onBlur={(e) => update((d) => setFantasyBank(d, parseFloat(e.target.value)))} />m
+    </label>
+  </div>
+  {swaps.length === 0 ? <p className="dim">No improving swap within budget.</p> : (
+    <table>
+      <thead><tr><th>Sell</th><th></th><th>Buy</th><th>Gain</th><th title="bank after this swap">Bank</th></tr></thead>
+      <tbody>
+        {swaps.map(({ sell, buy, gain, bankAfter }) => (
+          <tr key={sell.playerId}>
+            <td>{name(sell.playerId, sell.name)} <span className="dim">{sell.position} €{sell.price} · {one(sell.score)}</span></td>
+            <td>→</td>
+            <td>{name(buy.playerId, buy.name)}{buy.hot ? " 🔥" : ""} <span className="dim">{data.teams[buy.teamId]?.shortName ?? ""} €{buy.price} · {one(buy.score)}</span></td>
+            <td title={`${why(sell)}\n${why(buy)}`}>+{one(gain)}</td>
+            <td>€{bankAfter.toFixed(1)}m</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )}
+</div>
+```
+  Default `update = () => {}` and `readOnly = false` props so existing callers/tests keep working.
+- [ ] `npm test`, `npm run build` green; commit `feat: Swaps card with bank balance on My Team`.

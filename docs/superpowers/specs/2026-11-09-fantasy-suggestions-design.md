@@ -69,3 +69,26 @@ the window with a missed match as 0; ease sign home vs away and mean over the ne
 outlook formula incl. no fixtures; out-first sell order; buy targets exclude squad/out/no
 games, filter by position, limit; fixture runs order. SSR smoke: panel populated (names,
 "Suggestions", form-only note) and absent without a squad.
+
+## Addendum (2026-11-10): swap pairs — approved
+
+The bank balance only appears on the site while transfers are open: it is the last argument
+of the `replacePlayer(…, currentBalance)` buttons on `/Team/Transfers`. With the season over
+there are none, so for now the user types it in. Sync capture is deferred to 2027.
+
+- **Bank**: `data.meta.fantasyBank` (€m, number, default 0). User-owned; set through
+  `setFantasyBank(data, value)` in store.js; syncs never touch it. A "Bank €__m" number input
+  on the panel, disabled for read-only past seasons.
+- **`CLUB_LIMIT = 3`** (user-confirmed) in suggestions.js.
+- **`swapPairs(sctx, { bank = 0, sellCount = 5 })`**: for each of the first `sellCount`
+  `sellCandidates` that have an outlook and a price, the best-outlook player who is not in the
+  squad, same `position`, `games > 0`, not out, priced and `price <= sell.price + bank`
+  (1e-9 tolerance), and whose club would hold at most `CLUB_LIMIT` squad players after the swap
+  (selling frees the seller's club slot; squad counts use squad entries' players' `teamId`).
+  → `[{ sell, buy, gain, bankAfter }]` with `gain = buy.score − sell.score > 0`, `bankAfter =
+  sell.price + bank − buy.price`, sorted by gain descending. A seller with no improving
+  replacement yields no row.
+- **UI**: a "Swaps" card after "Weakest in your squad": bank input, then rows "Sell A (POS
+  €p, outlook) → buy B (CLUB €p, outlook) · +gain · bank €x"; empty state "No improving swap
+  within budget." Names open the player.
+- Out of scope: points hits, double transfers, chips.
