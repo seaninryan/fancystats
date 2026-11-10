@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { emptyData, applyImport, upsertMatchStubs, applySiteSync, setPlayerField, markOut } from "../src/lib/store.js";
+import { emptyData, applyImport, upsertMatchStubs, applySiteSync, setPlayerField, markOut, setFantasyBank } from "../src/lib/store.js";
 import { seasonView } from "../src/lib/seasons.js";
-import { suggestionContext, playerOutlook, mySquad, sellCandidates, buyTargets, fixtureRuns, FORM_WINDOW } from "../src/lib/suggestions.js";
+import { suggestionContext, playerOutlook, mySquad, sellCandidates, buyTargets, fixtureRuns, swapPairs, CLUB_LIMIT, FORM_WINDOW } from "../src/lib/suggestions.js";
 
 const NOW = 1765000000000;
 const DAY = 86400000;
@@ -119,5 +119,65 @@ describe("suggestions", () => {
     expect(runs.map((r) => r.teamId)).toEqual([1, 4]);
     expect(runs[0].name).toBe("Club 1");
     expect(runs[0].ease).toBeGreaterThan(runs[1].ease);
+  });
+  describe("swapPairs", () => {
+    const sync = (d, ids) => applySiteSync(d, {
+      capturedAt: NOW, siteTeamId: 7378, clubs: [], players: [], history: {},
+      myTeam: { "6": { lines: [[ids[0]], [ids[1]]], bench: ids.slice(2), captain: ids[0], shown: {}, names: {}, total: 50 } },
+    }, [10, 11, 20, 30, 40].map((p) => ({ playerId: String(p), siteId: 500 + p })), NOW);
+    const base = () => {
+      let d = setPlayerField(played(), 11, "price", 4);
+      d = sync(d, [510, 511, 540]); // squad 10 (FWD 9.5), 11 (MID 4), 40 (FWD 5)
+      return d;
+    };
+    const swaps = (d, o) => swapPairs(suggestionContext(view(d), NOW), o);
+
+    it("setFantasyBank is user-owned: new object, survives a sync", () => {
+      const d = played();
+      const d2 = setFantasyBank(d, 1.5);
+      expect(d2.meta.fantasyBank).toBe(1.5);
+      expect(d2).not.toBe(d);
+      expect(d.meta.fantasyBank).toBeUndefined();
+      expect(sync(d2, [510]).meta.fantasyBank).toBe(1.5);
+      expect(setFantasyBank(d, NaN).meta.fantasyBank).toBe(0);
+    });
+    it("same position only, affordability by bank, bankAfter", () => {
+      const d = base();
+      expect(swaps(d, { bank: 0 })).toEqual([]); // 40 (5) cannot afford 20 (7); 11 (4) cannot afford 30 (6)
+      const rows = swaps(setFantasyBank(d, 2), { bank: 2 });
+      const byBuy = Object.fromEntries(rows.map((r) => [r.sell.playerId, r]));
+      expect(byBuy["40"].buy.playerId).toBe("20");
+      expect(byBuy["40"].bankAfter).toBeCloseTo(0);
+      expect(byBuy["11"].buy.playerId).toBe("30");
+      expect(byBuy["11"].bankAfter).toBeCloseTo(0);
+      for (const r of rows) expect(r.buy.position).toBe(r.sell.position);
+      expect(swaps(d, { bank: 1.9 }).map((r) => r.sell.playerId)).toEqual([]);
+    });
+    it("only improving rows, one per seller, sorted by gain, sellCount respected, no owned/out/no-games buys", () => {
+      const d = base();
+      const rows = swaps(d, { bank: 10 });
+      expect(rows.length).toBe(2);
+      for (const r of rows) {
+        expect(r.gain).toBeGreaterThan(0);
+        expect(r.gain).toBeCloseTo(r.buy.score - r.sell.score);
+        expect(["10", "11", "40"]).not.toContain(r.buy.playerId);
+      }
+      expect(new Set(rows.map((r) => r.sell.playerId)).size).toBe(rows.length);
+      expect(rows[0].gain).toBeGreaterThanOrEqual(rows[1].gain);
+      expect(swaps(d, { bank: 10, sellCount: 1 })).toHaveLength(1);
+      const out = swaps(markOut(d, "20", "", NOW), { bank: 10 });
+      expect(out.map((r) => r.sell.playerId)).toEqual(["11"]);
+    });
+    it("club limit: a full club blocks a buy unless the seller frees the slot", () => {
+      expect(CLUB_LIMIT).toBe(3);
+      let d = base();
+      d = setPlayerField(d, 20, "teamId", 1);           // squad club-1 count: 10, 11, 20
+      d = setPlayerField(d, 30, "gamePosition", "FWD");
+      d = setPlayerField(d, 30, "teamId", 1);           // candidate from the full club
+      d = sync(d, [510, 511, 520, 540]);
+      const rows = swaps(d, { bank: 10, sellCount: 4 });
+      // 40 (club 4) cannot take 30: club 1 would hold 4. 20 (club 1) can: selling frees the slot.
+      expect(rows.map((r) => [r.sell.playerId, r.buy.playerId])).toEqual([["20", "30"]]);
+    });
   });
 });

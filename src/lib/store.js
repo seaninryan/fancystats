@@ -269,6 +269,13 @@ export function applyFantasyRows(data, rows, now) {
 // created: unmatched capture rows the user chose to add as fantasy-only players. They are
 // created first, then treated as matched rows, so they get their siteId link and the
 // inSquad sync like everyone else.
+// User-owned (syncs never touch it): the fantasy bank balance in €m, typed in on My Team.
+export function setFantasyBank(data, value) {
+  const next = structuredClone(data);
+  next.meta.fantasyBank = Number.isFinite(value) ? value : 0;
+  return next;
+}
+
 export function applySiteSync(data, parsed, rows, now, created = []) {
   if (created.length) {
     data = addFantasyOnlyPlayers(data, created, now);

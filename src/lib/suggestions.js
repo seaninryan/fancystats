@@ -103,3 +103,36 @@ export function fixtureRuns(sctx) {
     }))
     .sort((a, b) => b.ease - a.ease);
 }
+
+export const CLUB_LIMIT = 3; // most squad players from one club (site rule, user-confirmed)
+
+// For the weakest sellable players, the best same-position replacement within budget
+// (sale price + bank) that keeps every club at CLUB_LIMIT or fewer. Selling frees a slot.
+export function swapPairs(sctx, { bank = 0, sellCount = 5 } = {}) {
+  const { view } = sctx;
+  const squad = mySquad(view);
+  const owned = new Set(squad.map((e) => e.playerId).filter(Boolean));
+  const perClub = new Map();
+  for (const e of squad) {
+    const t = e.playerId != null ? view.players[e.playerId]?.teamId : null;
+    if (t != null) perClub.set(Number(t), (perClub.get(Number(t)) || 0) + 1);
+  }
+  const pool = Object.keys(view.players).filter((pid) => !owned.has(pid))
+    .map((pid) => playerOutlook(sctx, pid))
+    .filter((o) => o && o.games > 0 && !o.out && o.price != null);
+  const rows = [];
+  for (const { outlook: sell } of sellCandidates(sctx).filter((r) => r.outlook && r.outlook.price != null).slice(0, sellCount)) {
+    const budget = sell.price + bank;
+    let best = null;
+    for (const o of pool) {
+      if (o.position !== sell.position || o.price > budget + 1e-9) continue;
+      const after = (perClub.get(o.teamId) || 0) - (o.teamId === sell.teamId ? 1 : 0) + 1;
+      if (after > CLUB_LIMIT) continue;
+      if (!best || o.score > best.score) best = o;
+    }
+    if (best && best.score > sell.score) {
+      rows.push({ sell, buy: best, gain: best.score - sell.score, bankAfter: budget - best.price });
+    }
+  }
+  return rows.sort((a, b) => b.gain - a.gain);
+}
